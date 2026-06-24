@@ -1,29 +1,21 @@
-# render.yaml
-# ───────────────────────────────────────────────────────────────────────────
-# Render Blueprint — defines the web service and PostgreSQL database.
-# Commit this file to your repo root. Render auto-detects it on first deploy.
-#
-# Docs: https://render.com/docs/blueprint-spec
-# ───────────────────────────────────────────────────────────────────────────
 
 services:
-  # ── Web Service ──────────────────────────────────────────────────────────
   - type: web
     name: footy-scout-api
     runtime: python
-    region: frankfurt             # change to: oregon | singapore | ohio
-    plan: starter                 # free | starter | standard | pro
-    branch: main                  # deploy from this git branch
+    region: frankfurt
+    plan: free
+    branch: main
 
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
-      flask db upgrade             # run Alembic migrations on every deploy
-      python scripts/seed_db.py    # seeds roles + admin (idempotent)
+      flask db upgrade
+      python scripts/seed_db.py
 
     startCommand: >
       gunicorn wsgi:application
-      --workers 4
+      --workers 2
       --worker-class sync
       --timeout 120
       --bind 0.0.0.0:$PORT
@@ -33,9 +25,7 @@ services:
 
     healthCheckPath: /health
 
-    # ── Environment variables ────────────────────────────────────────────
-    # Set SECRET values in Render dashboard → Environment tab (not here).
-    # Non-secret defaults can be listed here.
+
     envVars:
       - key: FLASK_ENV
         value: production
@@ -43,13 +33,13 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
 
-      # DATABASE_URL is injected automatically by the db block below
+
       - key: DATABASE_URL
         fromDatabase:
           name: footy-scout-db
           property: connectionString
 
-      # ── All other vars: set in Render dashboard ──────────────────────
+      # set in Render dashboard 
       # SECRET_KEY                (generate with: python -c "import secrets; print(secrets.token_hex(32))")
       # JWT_SECRET_KEY            (generate same way)
       # ADMIN_EMAIL
