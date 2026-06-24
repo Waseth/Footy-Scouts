@@ -87,4 +87,3 @@ databases:
     databaseName: footy_scout_db
     user: footy_scout_user
     region: frankfurt             # must match web service region
-    plan: starter                 # free (90 days) | starter ($7/mo) | standard
