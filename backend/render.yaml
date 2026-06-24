@@ -1,18 +1,19 @@
-
 services:
   - type: web
     name: footy-scout-api
     runtime: python
-    region: frankfurt
+    region: oregon
     plan: free
     branch: main
+
+    rootDirectory: backend
 
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
       flask db upgrade
       python scripts/seed_db.py
-
+      
     startCommand: >
       gunicorn wsgi:application
       --workers 2
@@ -35,11 +36,10 @@ services:
 
 
       - key: DATABASE_URL
-        fromDatabase:
-          name: footy-scout-db
-          property: connectionString
+        sync: false
 
-      # set in Render dashboard 
+
+      # set in Render dashboard
       # SECRET_KEY                (generate with: python -c "import secrets; print(secrets.token_hex(32))")
       # JWT_SECRET_KEY            (generate same way)
       # ADMIN_EMAIL
@@ -71,9 +71,4 @@ services:
       # SENTRY_DSN                (optional)
       # REDIS_URL                 (optional — for Redis-backed rate limiting)
 
-  # ── PostgreSQL Database ───────────────────────────────────────────────────
-databases:
-  - name: footy-scout-db
-    databaseName: footy_scout_db
-    user: footy_scout_user
-    region: frankfurt             # must match web service region
+

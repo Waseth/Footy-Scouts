@@ -1,17 +1,6 @@
-"""
-scripts/seed_db.py
-──────────────────
-Seeds the database with:
-  1. The four user roles (PLAYER, SCOUT, INSTITUTION, ADMIN)
-  2. The admin user (credentials from .env)
-
-Run from the project root:
-    python scripts/seed_db.py
-"""
 import sys
 import os
 
-# Make sure the project root is on the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from dotenv import load_dotenv
@@ -63,7 +52,7 @@ def seed_admin(app):
 
     admin_role = Role.query.filter_by(name='ADMIN').first()
     if not admin_role:
-        print("❌  ADMIN role not found — run seed_roles first.")
+        print("  ADMIN role not found — run seed_roles first.")
         return
 
     admin = User(
@@ -77,7 +66,6 @@ def seed_admin(app):
     db.session.add(admin)
     db.session.flush()
 
-    # Admins get a free "subscription" row so FK constraints are met
     sub = Subscription(user_id=admin.id, plan='FREE')
     db.session.add(sub)
 
