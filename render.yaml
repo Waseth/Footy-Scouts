@@ -1,0 +1,90 @@
+# render.yaml
+# ───────────────────────────────────────────────────────────────────────────
+# Render Blueprint — defines the web service and PostgreSQL database.
+# Commit this file to your repo root. Render auto-detects it on first deploy.
+#
+# Docs: https://render.com/docs/blueprint-spec
+# ───────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Web Service ──────────────────────────────────────────────────────────
+  - type: web
+    name: footy-scout-api
+    runtime: python
+    region: frankfurt             # change to: oregon | singapore | ohio
+    plan: starter                 # free | starter | standard | pro
+    branch: main                  # deploy from this git branch
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      flask db upgrade             # run Alembic migrations on every deploy
+      python scripts/seed_db.py    # seeds roles + admin (idempotent)
+
+    startCommand: >
+      gunicorn wsgi:application
+      --workers 4
+      --worker-class sync
+      --timeout 120
+      --bind 0.0.0.0:$PORT
+      --log-level info
+      --access-logfile -
+      --error-logfile -
+
+    healthCheckPath: /health
+
+    # ── Environment variables ────────────────────────────────────────────
+    # Set SECRET values in Render dashboard → Environment tab (not here).
+    # Non-secret defaults can be listed here.
+    envVars:
+      - key: FLASK_ENV
+        value: production
+
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+      # DATABASE_URL is injected automatically by the db block below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: footy-scout-db
+          property: connectionString
+
+      # ── All other vars: set in Render dashboard ──────────────────────
+      # SECRET_KEY                (generate with: python -c "import secrets; print(secrets.token_hex(32))")
+      # JWT_SECRET_KEY            (generate same way)
+      # ADMIN_EMAIL
+      # ADMIN_PASSWORD
+      # ADMIN_FIRST_NAME
+      # ADMIN_LAST_NAME
+      # CLOUDINARY_CLOUD_NAME
+      # CLOUDINARY_API_KEY
+      # CLOUDINARY_API_SECRET
+      # STRIPE_SECRET_KEY
+      # STRIPE_PUBLISHABLE_KEY
+      # STRIPE_WEBHOOK_SECRET
+      # PAYPAL_CLIENT_ID
+      # PAYPAL_CLIENT_SECRET
+      # PAYPAL_MODE               (sandbox | live)
+      # MPESA_CONSUMER_KEY
+      # MPESA_CONSUMER_SECRET
+      # MPESA_SHORTCODE
+      # MPESA_PASSKEY
+      # MPESA_CALLBACK_URL        (https://footy-scout-api.onrender.com/api/v1/payments/mpesa/callback)
+      # MPESA_ENV                 (sandbox | production)
+      # MAIL_SERVER
+      # MAIL_PORT
+      # MAIL_USE_TLS
+      # MAIL_USERNAME
+      # MAIL_PASSWORD
+      # MAIL_DEFAULT_SENDER
+      # FRONTEND_URL              (https://yourfrontend.com)
+      # SENTRY_DSN                (optional)
+      # REDIS_URL                 (optional — for Redis-backed rate limiting)
+
+  # ── PostgreSQL Database ───────────────────────────────────────────────────
+databases:
+  - name: footy-scout-db
+    databaseName: footy_scout_db
+    user: footy_scout_user
+    region: frankfurt             # must match web service region
+    plan: starter                 # free (90 days) | starter ($7/mo) | standard
