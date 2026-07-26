@@ -1,7 +1,7 @@
 services:
   - type: web
     name: footy-scout-api
-    runtime: image     
+    runtime: docker
     region: oregon
     plan: free
     branch: main
