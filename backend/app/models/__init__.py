@@ -7,7 +7,8 @@ from .payment import Payment
 from .message import Message, Conversation
 from .tournament import Tournament, TournamentParticipant
 from .media import MediaUpload
-from .notification import Notification, AdminAction
+from .notification import Notification
+from .admin_action import AdminAction  
 
 __all__ = [
     'User', 'Role',
