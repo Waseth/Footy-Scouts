@@ -5,6 +5,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_int_env(key, default):
+    """Safely get integer from environment variable, with fallback."""
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        # Log the error but use default
+        print(f"WARNING: {key} has invalid value '{value}'. Using default {default}.")
+        return default
+
+
 class Config:
     """Base configuration."""
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
@@ -21,10 +34,10 @@ class Config:
         'max_overflow': 20,
     }
 
-    # JWT
+    # JWT - Now safe with get_int_env
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-change-in-prod')
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 3600)))
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=int(os.environ.get('JWT_REFRESH_TOKEN_EXPIRES', 2592000)))
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=get_int_env('JWT_ACCESS_TOKEN_EXPIRES', 3600))
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=get_int_env('JWT_REFRESH_TOKEN_EXPIRES', 2592000))
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
 
