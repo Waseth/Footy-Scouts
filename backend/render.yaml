@@ -1,54 +1,31 @@
 services:
   - type: web
     name: footy-scout-api
-    runtime: python
+    runtime: image     
     region: oregon
     plan: free
     branch: main
-
     rootDirectory: backend
 
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
-      flask db upgrade
-      python scripts/seed_db.py
+    dockerfilePath: Dockerfile
+    dockerContext: .
 
-    startCommand: >
-      gunicorn wsgi:application
-      --workers 2
-      --worker-class sync
-      --timeout 120
-      --bind 0.0.0.0:$PORT
-      --log-level info
-      --access-logfile -
-      --error-logfile -
 
     healthCheckPath: /health
 
     envVars:
       - key: FLASK_ENV
         value: production
-
-      - key: PYTHON_VERSION
-        value: "3.11.10"
-
-
       - key: DATABASE_URL
         sync: false
-
       - key: SECRET_KEY
         sync: false
-
       - key: JWT_SECRET_KEY
         sync: false
-
       - key: ADMIN_EMAIL
         sync: false
-
       - key: ADMIN_PASSWORD
         sync: false
-
       - key: FRONTEND_URL
         value: "http://localhost:3000"
 
