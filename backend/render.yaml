@@ -1,15 +1,23 @@
 services:
   - type: web
     name: footy-scout-api
-    runtime: docker
+    runtime: python
     region: oregon
     plan: free
     branch: main
     rootDirectory: backend
 
-    dockerfilePath: Dockerfile
-    dockerContext: .
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      flask db upgrade
+      python scripts/seed_db.py
 
+    startCommand: >
+      gunicorn wsgi:application
+      --workers 2
+      --timeout 120
+      --bind 0.0.0.0:$PORT
 
     healthCheckPath: /health
 
