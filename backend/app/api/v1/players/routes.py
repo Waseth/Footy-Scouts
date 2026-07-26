@@ -1,5 +1,6 @@
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity, jwt_optional
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
 from ....extensions import db, limiter
 from ....models import Player, User, Role, MediaUpload
 from ....services.cloudinary_service import CloudinaryService
