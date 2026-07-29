@@ -43,7 +43,7 @@ class Player(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationships - REMOVED the media relationship
+    # Relationships - REMOVED the media relationship to avoid conflict
     user = db.relationship('User', backref=db.backref('player_profile', uselist=False))
 
     __table_args__ = (

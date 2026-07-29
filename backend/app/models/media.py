@@ -34,6 +34,7 @@ class MediaUpload(db.Model):
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Relationship - defines the backref 'media_uploads' on User
     user = db.relationship('User', backref=db.backref('media_uploads', lazy='dynamic'))
 
     __table_args__ = (
