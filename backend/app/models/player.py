@@ -14,26 +14,26 @@ class Player(db.Model):
     full_name = db.Column(db.String(255), nullable=False)
     nationality = db.Column(db.String(100))
     date_of_birth = db.Column(db.Date)
-    gender = db.Column(db.String(20))  # Male, Female, Other
+    gender = db.Column(db.String(20))
 
     # Football Info
-    position = db.Column(db.String(100))    # Goalkeeper, Defender, Midfielder, Forward
+    position = db.Column(db.String(100))
     current_team = db.Column(db.String(255))
     school = db.Column(db.String(255))
 
-    # Contact (only visible to premium users or when player is premium)
+    # Contact
     contact_number = db.Column(db.String(30))
-    show_contact = db.Column(db.Boolean, default=False)  # player can toggle
+    show_contact = db.Column(db.Boolean, default=False)
 
     # Bio
     biography = db.Column(db.Text)
 
     # Profile Picture
     profile_picture_url = db.Column(db.String(500))
-    profile_picture_public_id = db.Column(db.String(255))  # Cloudinary public_id
+    profile_picture_public_id = db.Column(db.String(255))
 
     # Admin actions
-    is_featured = db.Column(db.Boolean, default=False)  # featured by admin
+    is_featured = db.Column(db.Boolean, default=False)
 
     # Stats
     profile_views = db.Column(db.Integer, default=0)
@@ -45,7 +45,9 @@ class Player(db.Model):
 
     # Relationships
     user = db.relationship('User', backref=db.backref('player_profile', uselist=False))
-    media = db.relationship('MediaUpload', backref='player', lazy='dynamic',
+
+    # Fixed relationship - removed lazy='dynamic'
+    media = db.relationship('MediaUpload', backref='player',
                             primaryjoin="and_(MediaUpload.user_id == foreign(Player.user_id))",
                             foreign_keys='MediaUpload.user_id', overlaps='media_uploads,user')
 
