@@ -43,13 +43,8 @@ class Player(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationships
+    # Relationships - REMOVED the media relationship
     user = db.relationship('User', backref=db.backref('player_profile', uselist=False))
-
-    # Fixed relationship - removed lazy='dynamic'
-    media = db.relationship('MediaUpload', backref='player',
-                            primaryjoin="and_(MediaUpload.user_id == foreign(Player.user_id))",
-                            foreign_keys='MediaUpload.user_id', overlaps='media_uploads,user')
 
     __table_args__ = (
         Index('idx_players_user_id', 'user_id'),
