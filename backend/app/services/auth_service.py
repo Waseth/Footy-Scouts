@@ -24,7 +24,8 @@ class AuthService:
         # Create user
         user = User(email=email.lower(), role_id=role.id)
         user.set_password(password)
-        user.email_verification_token = secrets.token_urlsafe(32)
+        # Email verification disabled - no token generation
+        # user.email_verification_token = secrets.token_urlsafe(32)
 
         # Players are auto-approved; scouts and institutions need admin approval
         if role_name == Role.PLAYER:
@@ -103,12 +104,13 @@ class AuthService:
             # Don't reveal if email exists
             return {'message': 'If that email is registered, a reset link was sent.'}, 200
 
-        token = secrets.token_urlsafe(32)
-        user.reset_token = token
-        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
-        db.session.commit()
+        # Password reset disabled - no token generation
+        # token = secrets.token_urlsafe(32)
+        # user.reset_token = token
+        # user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        # db.session.commit()
 
-        return {'message': 'Reset link sent.', 'token': token, 'user': user}, 200
+        return {'message': 'If that email is registered, a reset link was sent.'}, 200
 
     @staticmethod
     def reset_password(token: str, new_password: str) -> dict:

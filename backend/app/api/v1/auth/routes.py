@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
 from ....services.auth_service import AuthService
-from ....services.email_service import EmailService
 from ....utils.validators import validate_email, validate_password
 from ....utils.helpers import success_response, error_response
 from ....utils.decorators import get_current_user
@@ -46,10 +45,7 @@ def register():
 
     user = result['user']
 
-    # Send verification email (async in production)
-    if user.email_verification_token:
-        EmailService.send_verification_email(user.email, user.email_verification_token)
-
+    
     approval_msg = ""
     if role_name in [Role.SCOUT, Role.INSTITUTION]:
         approval_msg = " Your account is pending admin approval before your profile goes public."
@@ -57,7 +53,7 @@ def register():
     return success_response(
         data={
             'user': user.to_dict(),
-            'message': f'Registration successful.{approval_msg} Please verify your email.',
+            'message': f'Registration successful.{approval_msg}',
         },
         status_code=201,
     )
@@ -117,9 +113,9 @@ def forgot_password():
 
     result, status = AuthService.request_password_reset(email)
 
-    # Send email if user found (token in result for internal use)
-    if 'token' in result and 'user' in result:
-        EmailService.send_password_reset_email(result['user'].email, result['token'])
+    # Email disabled - no email sending
+    # if 'token' in result and 'user' in result:
+    #     EmailService.send_password_reset_email(result['user'].email, result['token'])
 
     # Always return generic message (don't reveal if email exists)
     return success_response(message=result['message'], status_code=200)
