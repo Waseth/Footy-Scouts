@@ -14,17 +14,14 @@ class MediaUpload(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
-    # File info
     media_type = db.Column(db.String(20), nullable=False)  # IMAGE, VIDEO, PDF
     title = db.Column(db.String(255))
     description = db.Column(db.Text)
 
-    # Cloudinary info
     url = db.Column(db.String(500), nullable=False)
     public_id = db.Column(db.String(255), nullable=False)  # Cloudinary public_id for deletion
     secure_url = db.Column(db.String(500))
 
-    # File metadata
     original_filename = db.Column(db.String(255))
     file_size = db.Column(db.Integer)  # bytes
     format = db.Column(db.String(20))  # jpg, mp4, pdf, etc.
@@ -32,11 +29,12 @@ class MediaUpload(db.Model):
     height = db.Column(db.Integer)  # for images/videos
     duration = db.Column(db.Float)  # for videos (seconds)
 
-    # Moderation
     is_approved = db.Column(db.Boolean, default=True)  # Admin can disapprove
     moderation_note = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = db.relationship('User', backref=db.backref('media_uploads', lazy='dynamic'))
 
     __table_args__ = (
         Index('idx_media_uploads_user_id', 'user_id'),
