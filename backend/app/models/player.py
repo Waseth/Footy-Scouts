@@ -10,40 +10,26 @@ class Player(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), unique=True, nullable=False)
 
-    # Personal Info
     full_name = db.Column(db.String(255), nullable=False)
     nationality = db.Column(db.String(100))
     date_of_birth = db.Column(db.Date)
     gender = db.Column(db.String(20))
-
-    # Football Info
     position = db.Column(db.String(100))
     current_team = db.Column(db.String(255))
     school = db.Column(db.String(255))
-
-    # Contact
     contact_number = db.Column(db.String(30))
     show_contact = db.Column(db.Boolean, default=False)
-
-    # Bio
     biography = db.Column(db.Text)
-
-    # Profile Picture
     profile_picture_url = db.Column(db.String(500))
     profile_picture_public_id = db.Column(db.String(255))
-
-    # Admin actions
     is_featured = db.Column(db.Boolean, default=False)
-
-    # Stats
     profile_views = db.Column(db.Integer, default=0)
 
-    # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationships - REMOVED the media relationship to avoid conflict
+    # ✅ Only this relationship - no media relationship
     user = db.relationship('User', backref=db.backref('player_profile', uselist=False))
 
     __table_args__ = (

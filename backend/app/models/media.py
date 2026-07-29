@@ -14,28 +14,27 @@ class MediaUpload(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
-    media_type = db.Column(db.String(20), nullable=False)  # IMAGE, VIDEO, PDF
+    media_type = db.Column(db.String(20), nullable=False)
     title = db.Column(db.String(255))
     description = db.Column(db.Text)
 
     url = db.Column(db.String(500), nullable=False)
-    public_id = db.Column(db.String(255), nullable=False)  # Cloudinary public_id for deletion
+    public_id = db.Column(db.String(255), nullable=False)
     secure_url = db.Column(db.String(500))
 
     original_filename = db.Column(db.String(255))
-    file_size = db.Column(db.Integer)  # bytes
-    format = db.Column(db.String(20))  # jpg, mp4, pdf, etc.
-    width = db.Column(db.Integer)   # for images/videos
-    height = db.Column(db.Integer)  # for images/videos
-    duration = db.Column(db.Float)  # for videos (seconds)
+    file_size = db.Column(db.Integer)
+    format = db.Column(db.String(20))
+    width = db.Column(db.Integer)
+    height = db.Column(db.Integer)
+    duration = db.Column(db.Float)
 
-    is_approved = db.Column(db.Boolean, default=True)  # Admin can disapprove
+    is_approved = db.Column(db.Boolean, default=True)
     moderation_note = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Relationship - defines the backref 'media_uploads' on User
-    user = db.relationship('User', backref=db.backref('media_uploads', lazy='dynamic'))
+    # ✅ NO relationship defined here
 
     __table_args__ = (
         Index('idx_media_uploads_user_id', 'user_id'),
