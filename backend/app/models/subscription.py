@@ -46,8 +46,12 @@ class Subscription(db.Model):
             return True
         if self.status != self.STATUS_ACTIVE:
             return False
-        if self.end_date and datetime.now(timezone.utc) > self.end_date:
-            return False
+        if self.end_date:
+        # Convert to timezone-aware if it's naive
+            end_date = self.end_date
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) <= end_date
         return True
 
     def is_premium(self):
