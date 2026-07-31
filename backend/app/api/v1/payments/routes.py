@@ -36,7 +36,7 @@ def _activate_subscription(user: User, plan: str, payment: Payment):
 
     # Notify user
     NotificationService.notify_subscription_activated(user.id, plan)
-    EmailService.send_subscription_confirmation(user.email, plan, sub.end_date)
+    # EmailService.send_subscription_confirmation(user.email, plan, sub.end_date)
     return sub
 
 
