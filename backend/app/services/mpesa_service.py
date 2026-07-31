@@ -1,7 +1,7 @@
 import base64
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 
 
@@ -52,7 +52,7 @@ class MpesaService:
             callback_url = current_app.config['MPESA_CALLBACK_URL']
             base_url = MpesaService._get_base_url()
 
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
             password = MpesaService._generate_password(shortcode, passkey, timestamp)
 
             # Normalize phone number (remove +, spaces)
@@ -144,7 +144,7 @@ class MpesaService:
             passkey = current_app.config['MPESA_PASSKEY']
             base_url = MpesaService._get_base_url()
 
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
             password = MpesaService._generate_password(shortcode, passkey, timestamp)
 
             payload = {
