@@ -3,21 +3,21 @@ import Link from "next/link";
 
 /* ─── Footer link columns ──────────────────────────────── */
 const solutions = [
-    { id: 1, label: "Tournaments", href: "/" },
-    { id: 2, label: "Partners", href: "/" },
-    { id: 3, label: "Subscribe", href: "/" },
+    { id: 1, label: "Tournaments", href: "/tournaments" },
+    { id: 2, label: "Partners", href: "/partners" },
+    { id: 3, label: "Subscribe", href: "/subscribe" },
 ];
 
 const resources = [
-    { id: 1, label: "Privacy Policy", href: "/" },
-    { id: 2, label: "Terms of Service", href: "/" },
-    { id: 3, label: "User Terms and Conditions", href: "/" },
+    { id: 1, label: "Privacy Policy", href: "/privacy-policy" },
+    { id: 2, label: "Terms of Service", href: "/terms-of-service" },
+    { id: 3, label: "User Terms and Conditions", href: "/user-terms-and-conditions" },
 ];
 
 const company = [
     { id: 1, label: "Home", href: "/" },
     { id: 2, label: "About Us", href: "/about" },
-    { id: 3, label: "Register", href: "/auth/signup" },
+    { id: 3, label: "Register", href: "/signup" },
     { id: 4, label: "Contact", href: "/contact" },
 ];
 

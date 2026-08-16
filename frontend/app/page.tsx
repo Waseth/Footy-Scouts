@@ -8,10 +8,13 @@ import Link from "next/link";
 import { dummyTournaments } from "@/lib/DummyData";
 import TournamentCard from "@/components/TournamentCard";
 import ScoutCard from "@/components/ScoutCard";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-[#1C1928]">
+      <Navbar/>
       {/* Hero */}
       <section className="container overflow-hidden mt-8 py-20 sm:py-24">
         <div
@@ -127,6 +130,7 @@ export default function Home() {
       </section>
 
       <FAQ />
+      <Footer />
     </div>
   );
 }
