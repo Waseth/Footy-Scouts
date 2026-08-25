@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ArrowRight, Globe, MapPin, Building2 } from "lucide-react";
+import Image from "next/image";
 
 export default function ScoutOnboarding() {
   const [scoutType, setScoutType] = useState("INDIVIDUAL");
@@ -67,14 +68,12 @@ export default function ScoutOnboarding() {
       {/* Left — brand panel */}
       <div className="relative flex w-full items-center justify-center overflow-hidden bg-[#1C1928] p-8 md:w-1/2 md:p-0">
         <div
-          className={`absolute -left-[20%] -top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${
-            animate ? "scale-110" : "scale-100"
-          }`}
+          className={`absolute -left-[20%] -top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${animate ? "scale-110" : "scale-100"
+            }`}
         />
         <div
-          className={`absolute -bottom-[10%] -right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${
-            animate ? "scale-125" : "scale-100"
-          }`}
+          className={`absolute -bottom-[10%] -right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${animate ? "scale-125" : "scale-100"
+            }`}
         />
         <div className="relative z-10 max-w-md text-center text-white md:text-left">
           <h1 className="mb-6 text-4xl font-bold md:text-5xl">
@@ -104,6 +103,8 @@ export default function ScoutOnboarding() {
       <div className="flex w-full items-center justify-center bg-[#242030] p-8 md:w-1/2 md:p-16">
         <div className="w-full max-w-md">
           <div className="mb-10 text-center">
+            <Image src="/logo-modified.png" loading="eager" alt="logo" className="mx-auto mb-3 h-auto w-auto" width={100} height={50} />
+
             <h2 className="text-2xl font-bold text-white">Footy Scouts</h2>
             <p className="mt-1 text-sm text-white/50">Your football recruitment network</p>
           </div>
@@ -130,22 +131,20 @@ export default function ScoutOnboarding() {
                 <button
                   type="button"
                   onClick={() => setScoutType("INDIVIDUAL")}
-                  className={`rounded-md border-2 px-4 py-3 text-sm font-medium transition-all duration-300 ${
-                    scoutType === "INDIVIDUAL"
+                  className={`rounded-md border-2 px-4 py-3 text-sm font-medium transition-all duration-300 ${scoutType === "INDIVIDUAL"
                       ? "border-[#D4AF6A] bg-[#D4AF6A]/10 text-white"
                       : "border-white/10 bg-white/5 text-white/60 hover:border-white/25"
-                  }`}
+                    }`}
                 >
                   Individual
                 </button>
                 <button
                   type="button"
                   onClick={() => setScoutType("AGENCY")}
-                  className={`rounded-md border-2 px-4 py-3 text-sm font-medium transition-all duration-300 ${
-                    scoutType === "AGENCY"
+                  className={`rounded-md border-2 px-4 py-3 text-sm font-medium transition-all duration-300 ${scoutType === "AGENCY"
                       ? "border-[#D4AF6A] bg-[#D4AF6A]/10 text-white"
                       : "border-white/10 bg-white/5 text-white/60 hover:border-white/25"
-                  }`}
+                    }`}
                 >
                   Agency
                 </button>
@@ -207,11 +206,10 @@ export default function ScoutOnboarding() {
           </div>
 
           <button
-            className={`flex w-full items-center justify-center rounded-md py-4 text-base font-medium transition-all duration-300 ${
-              isFormValid
+            className={`flex w-full items-center justify-center rounded-md py-4 text-base font-medium transition-all duration-300 ${isFormValid
                 ? "cursor-pointer bg-white text-[#1C1928] hover:bg-white/90"
                 : "cursor-not-allowed bg-white/10 text-white/30"
-            }`}
+              }`}
             onClick={handleContinue}
             disabled={!isFormValid || submitting}
           >

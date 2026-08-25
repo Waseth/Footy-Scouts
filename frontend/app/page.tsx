@@ -16,7 +16,7 @@ export default function Home() {
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar/>
       {/* Hero */}
-      <section className="container overflow-hidden mt-8 py-20 sm:py-24">
+      <section className="container overflow-hidden py-20 sm:py-24">
         <div
           className="hero-content wow fadeInUp mx-auto max-w-195 text-center"
           data-wow-delay=".2s"

@@ -1,5 +1,6 @@
 import GridShape from "@/components/common/GridShape";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AuthLayout({ children }) {
   return (
@@ -13,7 +14,15 @@ export default function AuthLayout({ children }) {
             <GridShape />
             <div className="flex max-w-xs flex-col items-center px-6 text-center">
               <Link href="/" className="mb-4 block">
-                <h1 className="text-4xl font-bold tracking-wider text-white">
+                <Image
+                  src="/logo-modified.png"
+                  loading="eager"
+                  alt="logo"
+                  className="mx-auto mb-3 h-auto w-auto"
+                  width={472}
+                  height={152}
+                />
+                <h1 className="text-4xl font-bold text-white">
                   Footy Scouts
                 </h1>
               </Link>

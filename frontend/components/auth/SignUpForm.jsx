@@ -187,7 +187,7 @@ export default function SignUpForm() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-white/60 sm:text-left">
+        <p className="mt-6 text-center text-sm text-white/80 sm:text-left">
           Already have an account?{" "}
           <Link href="/login" className="gold-font hover:underline">
             Login
