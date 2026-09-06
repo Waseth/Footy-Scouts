@@ -73,15 +73,15 @@ export default function Onboarding() {
           </p>
           <div className="mb-8 space-y-4">
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">A profile built for how scouts actually search</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">Direct visibility to verified scouts and clubs</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">From grassroots tournaments to the professionals</span>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function Onboarding() {
               onClick={() => handleSelect("PLAYER")}
             >
               <div
-                className={`mr-6 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                className={`mr-6 flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
                   selectedOption === "PLAYER" ? "bg-[#D4AF6A]" : "bg-white/10"
                 }`}
               >
@@ -133,7 +133,7 @@ export default function Onboarding() {
                 <p className="text-sm text-white/50">I want to build a profile and get scouted</p>
               </div>
               {selectedOption === "PLAYER" && (
-                <CheckCircle2 className="ml-auto h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+                <CheckCircle2 className="ml-auto h-6 w-6 shrink-0 text-[#D4AF6A]" />
               )}
             </button>
 
@@ -146,7 +146,7 @@ export default function Onboarding() {
               onClick={() => handleSelect("SCOUT")}
             >
               <div
-                className={`mr-6 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                className={`mr-6 flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
                   selectedOption === "SCOUT" ? "bg-[#D4AF6A]" : "bg-white/10"
                 }`}
               >
@@ -157,7 +157,7 @@ export default function Onboarding() {
                 <p className="text-sm text-white/50">I want to discover and track talent</p>
               </div>
               {selectedOption === "SCOUT" && (
-                <CheckCircle2 className="ml-auto h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+                <CheckCircle2 className="ml-auto h-6 w-6 shrink-0 text-[#D4AF6A]" />
               )}
             </button>
           </div>

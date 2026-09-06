@@ -76,11 +76,11 @@ export default function PlayerOnboarding() {
       {/* Left — brand panel */}
       <div className="relative flex w-full items-center justify-center overflow-hidden bg-[#1C1928] p-8 md:w-1/2 md:p-0">
         <div
-          className={`absolute -left-[20%] -top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${animate ? "scale-110" : "scale-100"
+          className={`absolute left-[20%] top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${animate ? "scale-110" : "scale-100"
             }`}
         />
         <div
-          className={`absolute -bottom-[10%] -right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${animate ? "scale-125" : "scale-100"
+          className={`absolute bottom-[10%] right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${animate ? "scale-125" : "scale-100"
             }`}
         />
         <div className="relative z-10 max-w-md text-center text-white md:text-left">
@@ -92,15 +92,15 @@ export default function PlayerOnboarding() {
           </p>
           <div className="mb-8 space-y-4">
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">Searchable by position and nationality</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">Add highlights and stats later from your dashboard</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="mr-3 h-6 w-6 flex-shrink-0 text-[#D4AF6A]" />
+              <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-[#D4AF6A]" />
               <span className="text-white/80">You control what scouts can see</span>
             </div>
           </div>

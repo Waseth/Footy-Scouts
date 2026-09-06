@@ -11,6 +11,7 @@ export default function NotFound() {
         {/* Placeholder logo — swap this block for your actual logo/mark */}
         <Image
           src="/logo.jpeg"
+          loading="eager"
           alt="logo"
           className="mx-auto mb-3 h-auto w-auto"
           width={472}

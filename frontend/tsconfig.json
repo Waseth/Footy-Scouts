@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-  ],
+, "lib/profileData.js", "components/profile/Accordion.jsx", "app/players/[id]/page.jsx", "app/scouts/[id]/page.jsx"  ],
   "exclude": ["node_modules"]
 }

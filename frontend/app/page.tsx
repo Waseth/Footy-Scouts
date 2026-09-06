@@ -59,7 +59,7 @@ export default function Home() {
             <li>
               <a
 
-                href="/auth/signup"
+                href="/signup"
                 className="inline-flex items-center justify-center rounded-md bg-white px-7 py-3.5 text-center text-base font-medium text-black shadow-1 transition duration-300 ease-in-out hover:bg-gray-2 hover:text-body-color"
               >
                 Register Now
