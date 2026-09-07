@@ -23,15 +23,11 @@ def init_extensions(app):
     jwt.init_app(app)
     limiter.init_app(app)
     mail.init_app(app)
-
-    # ✅ Allow all origins for development
     cors.init_app(app, resources={
-        r"/*": {  # ← Changed from r"/api/*" to r"/*"
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+        r"/api/*": {
+            "origins": [app.config.get('FRONTEND_URL', 'http://localhost:3000')],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "Accept"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True,
+            "allow_headers": ["Content-Type", "Authorization"],
         }
     })
 

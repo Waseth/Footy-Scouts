@@ -5,7 +5,7 @@ from ....services.auth_service import AuthService
 from ....utils.validators import validate_email, validate_password
 from ....utils.helpers import success_response, error_response
 from ....utils.decorators import get_current_user
-from ....extensions import db, limiter
+from ....extensions import limiter
 from ....models import Role
 
 auth_bp = Blueprint('auth', __name__)
@@ -45,11 +45,7 @@ def register():
 
     user = result['user']
 
-    # ✅ Auto-verify the user (no email verification)
-    user.is_verified = True
-    user.email_verification_token = None
-    db.session.commit()
-
+    
     approval_msg = ""
     if role_name in [Role.SCOUT, Role.INSTITUTION]:
         approval_msg = " Your account is pending admin approval before your profile goes public."
@@ -117,7 +113,11 @@ def forgot_password():
 
     result, status = AuthService.request_password_reset(email)
 
-    # ❌ No email sending - just return success
+    # Email disabled - no email sending
+    # if 'token' in result and 'user' in result:
+    #     EmailService.send_password_reset_email(result['user'].email, result['token'])
+
+    # Always return generic message (don't reveal if email exists)
     return success_response(message=result['message'], status_code=200)
 
 
@@ -143,10 +143,18 @@ def reset_password():
     return success_response(message=result['message'], status_code=200)
 
 
-# ❌ REMOVE the verify-email endpoint entirely
-# @auth_bp.route('/verify-email', methods=['POST'])
-# def verify_email():
-#     ...
+@auth_bp.route('/verify-email', methods=['POST'])
+def verify_email():
+    """Verify email with token."""
+    data = request.get_json()
+    token = data.get('token', '')
+    if not token:
+        return error_response("Token required", 400)
+
+    result, status = AuthService.verify_email(token)
+    if 'error' in result:
+        return error_response(result['error'], status)
+    return success_response(message=result['message'])
 
 
 @auth_bp.route('/me', methods=['GET'])

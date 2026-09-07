@@ -24,7 +24,7 @@ class AuthService:
         # Create user
         user = User(email=email.lower(), role_id=role.id)
         user.set_password(password)
-        # ❌ REMOVE email verification token
+        # Email verification disabled - no token generation
         # user.email_verification_token = secrets.token_urlsafe(32)
 
         # Players are auto-approved; scouts and institutions need admin approval
@@ -104,7 +104,7 @@ class AuthService:
             # Don't reveal if email exists
             return {'message': 'If that email is registered, a reset link was sent.'}, 200
 
-        # ❌ REMOVE password reset token generation (no emails)
+        # Password reset disabled - no token generation
         # token = secrets.token_urlsafe(32)
         # user.reset_token = token
         # user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -130,4 +130,12 @@ class AuthService:
 
         return {'message': 'Password reset successfully'}, 200
 
-   
+    @staticmethod
+    def verify_email(token: str) -> dict:
+        user = User.query.filter_by(email_verification_token=token).first()
+        if not user:
+            return {'error': 'Invalid token'}, 400
+        user.is_verified = True
+        user.email_verification_token = None
+        db.session.commit()
+        return {'message': 'Email verified successfully'}, 200

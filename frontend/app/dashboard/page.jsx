@@ -15,16 +15,16 @@ import {
   Star,
   Eye
 } from 'lucide-react';
-import { api, User as UserType, Subscription } from '@/lib/api';
+import { api } from '@/lib/api';  // ✅ Remove type imports
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<UserType | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [user, setUser] = useState(null);  // ✅ Remove type annotation
+  const [subscription, setSubscription] = useState(null);  // ✅ Remove type annotation
+  const [stats, setStats] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {

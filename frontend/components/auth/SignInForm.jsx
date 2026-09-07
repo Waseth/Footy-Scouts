@@ -50,6 +50,7 @@ export default function SignInForm() {
         body: JSON.stringify(loginData),
       });
       const data = await res.json();
+
       if (res.ok && data.data) {
         if (data.data.access_token) {
           localStorage.setItem('access_token', data.data.access_token);
@@ -62,11 +63,30 @@ export default function SignInForm() {
         }
         router.push("/dashboard");
       } else {
-        setErrors((prev) => ({ ...prev, general: data.error || data.message || "Login failed" }));
+        // Handle specific error messages
+        if (data.error === "Invalid email or password") {
+          setErrors((prev) => ({
+            ...prev,
+            general: "Invalid email or password. Please try again or create an account."
+          }));
+        } else {
+          setErrors((prev) => ({
+            ...prev,
+            general: data.error || data.message || "Login failed"
+          }));
+        }
       }
     } catch (err) {
-      console.error(err);
-      setErrors((prev) => ({ ...prev, general: "Error during login" }));
+      console.error("Login error:", err);
+      // Check if it's a network error (backend not reachable)
+      if (err.message === "Failed to fetch" || err.name === "TypeError") {
+        setErrors((prev) => ({
+          ...prev,
+          general: "Cannot connect to the server. Please make sure the backend is running on http://localhost:5000"
+        }));
+      } else {
+        setErrors((prev) => ({ ...prev, general: "Error during login" }));
+      }
     } finally {
       setLoading(false);
     }

@@ -75,7 +75,7 @@ export default function SignUpForm() {
         if (data.data.user) {
           localStorage.setItem('user', JSON.stringify(data.data.user));
         }
-        router.push(`/verify?email=${encodeURIComponent(email)}`);
+        router.push("/onboarding");
       } else {
         setErrors((prev) => ({ ...prev, general: data.error || data.message || "Signup failed" }));
       }

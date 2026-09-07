@@ -45,8 +45,8 @@ class User(db.Model):
     reset_token = db.Column(db.String(255), nullable=True)
     reset_token_expires = db.Column(db.DateTime, nullable=True)
 
-    # # Email verification
-    # email_verification_token = db.Column(db.String(255), nullable=True)
+    # Email verification
+    email_verification_token = db.Column(db.String(255), nullable=True)
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
