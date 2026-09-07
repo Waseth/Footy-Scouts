@@ -7,71 +7,77 @@ import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/InputField";
-import Checkbox from "@/components/form/Checkbox";
 import Button from "@/components/elements/Button";
 
 const signupSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(6, "Please confirm your password"),
+  role: z.enum(["PLAYER", "SCOUT", "INSTITUTION"]),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 export default function SignUpForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("PLAYER");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
-    firstName: "",
-    lastName: "",
     email: "",
     password: "",
+    confirmPassword: "",
+    role: "",
     general: "",
   });
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    setErrors({ firstName: "", lastName: "", email: "", password: "", general: "" });
+    setErrors({ email: "", password: "", confirmPassword: "", role: "", general: "" });
 
     if (!isChecked) {
       setErrors((prev) => ({ ...prev, general: "Please accept the Terms and Privacy Policy to continue." }));
       return;
     }
 
-    const formData = { firstName, lastName, email, password };
+    const formData = { email, password, confirmPassword, role };
     const result = signupSchema.safeParse(formData);
     if (!result.success) {
       const formatted = result.error.format();
       setErrors({
-        firstName: formatted.firstName?._errors[0] || "",
-        lastName: formatted.lastName?._errors[0] || "",
         email: formatted.email?._errors[0] || "",
         password: formatted.password?._errors[0] || "",
+        confirmPassword: formatted.confirmPassword?._errors[0] || "",
+        role: formatted.role?._errors[0] || "",
         general: "",
       });
       return;
     }
 
     setLoading(true);
-    const payload = { name: `${firstName} ${lastName}`, email, password };
 
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ email, password, role }),
       });
+
       const data = await res.json();
-      if (res.ok) {
+
+      if (res.ok && data.data) {
+        if (data.data.user) {
+          localStorage.setItem('user', JSON.stringify(data.data.user));
+        }
         router.push(`/verify?email=${encodeURIComponent(email)}`);
       } else {
-        setErrors((prev) => ({ ...prev, general: data.message || "Signup failed" }));
+        setErrors((prev) => ({ ...prev, general: data.error || data.message || "Signup failed" }));
       }
     } catch (err) {
       console.error(err);
@@ -92,36 +98,11 @@ export default function SignUpForm() {
         </div>
 
         <form onSubmit={handleSignup} className="space-y-5">
-          {errors.general && <p className="text-sm text-red-500">{errors.general}</p>}
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="fname">
-                First Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="fname"
-                placeholder="Enter your first name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                error={!!errors.firstName}
-              />
-              {errors.firstName && <p className="mt-1 text-sm text-red-500">{errors.firstName}</p>}
+          {errors.general && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
+              {errors.general}
             </div>
-            <div>
-              <Label htmlFor="lname">
-                Last Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="lname"
-                placeholder="Enter your last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                error={!!errors.lastName}
-              />
-              {errors.lastName && <p className="mt-1 text-sm text-red-500">{errors.lastName}</p>}
-            </div>
-          </div>
+          )}
 
           <div>
             <Label htmlFor="email">
@@ -146,7 +127,7 @@ export default function SignUpForm() {
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
+                placeholder="Enter your password (min 6 characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 error={!!errors.password}
@@ -159,6 +140,46 @@ export default function SignUpForm() {
               </span>
             </div>
             {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="confirmPassword">
+              Confirm Password <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                error={!!errors.confirmPassword}
+              />
+              <span
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-white/50"
+              >
+                {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+              </span>
+            </div>
+            {errors.confirmPassword && <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="role">
+              I am a <span className="text-red-500">*</span>
+            </Label>
+            <select
+              id="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white focus:border-[#D4AF6A]/60 outline-none transition"
+            >
+              <option value="PLAYER">Player</option>
+              <option value="SCOUT">Scout / Agent</option>
+              <option value="INSTITUTION">Club / Academy / Institution</option>
+            </select>
+            {errors.role && <p className="mt-1 text-sm text-red-500">{errors.role}</p>}
           </div>
 
           <div className="flex items-start gap-3">

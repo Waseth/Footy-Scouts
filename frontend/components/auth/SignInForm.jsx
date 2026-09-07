@@ -23,11 +23,11 @@ export default function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({ email: "", password: "", general: "" });
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setErrors({ email: "", password: "" });
+    setErrors({ email: "", password: "", general: "" });
     const loginData = { email, password, remember: isChecked };
 
     const result = loginSchema.safeParse(loginData);
@@ -36,27 +36,37 @@ export default function SignInForm() {
       setErrors({
         email: formatted.email?._errors[0] || "",
         password: formatted.password?._errors[0] || "",
+        general: "",
       });
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(loginData),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.data) {
+        if (data.data.access_token) {
+          localStorage.setItem('access_token', data.data.access_token);
+        }
+        if (data.data.refresh_token) {
+          localStorage.setItem('refresh_token', data.data.refresh_token);
+        }
+        if (data.data.user) {
+          localStorage.setItem('user', JSON.stringify(data.data.user));
+        }
         router.push("/dashboard");
       } else {
-        setErrors((prev) => ({ ...prev, password: data.message || "Login failed" }));
+        setErrors((prev) => ({ ...prev, general: data.error || data.message || "Login failed" }));
       }
     } catch (err) {
       console.error(err);
-      setErrors((prev) => ({ ...prev, password: "Error during login" }));
+      setErrors((prev) => ({ ...prev, general: "Error during login" }));
     } finally {
       setLoading(false);
     }
@@ -73,6 +83,12 @@ export default function SignInForm() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
+          {errors.general && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
+              {errors.general}
+            </div>
+          )}
+
           <div>
             <Label htmlFor="email">
               Email <span className="text-red-500">*</span>
