@@ -8,7 +8,7 @@ export default function AboutCTA() {
           <div className="w-full px-4">
             <div className="mx-auto max-w-142.5 text-center">
               <h2 className="mb-2.5 text-3xl font-bold text-white md:text-[38px] md:leading-[1.44]">
-                Create Your <strong className="gold-font">FREE</strong>
+                Create Your <strong className="gold-font text-[#D4AF6A]">FREE</strong>
                 <br />
                 Player Or Scout Profile
               </h2>
@@ -27,7 +27,7 @@ export default function AboutCTA() {
 
               <Link
                 href="/signup"
-                className="inline-block rounded-md bg-white px-7 py-3 text-base font-medium text-black shadow-1 transition duration-300 ease-in-out hover:bg-gray-2 hover:text-body-color"
+                className="inline-block rounded-md bg-[#D4AF6A] px-7 py-3 text-base font-medium text-black shadow-1 transition duration-300 ease-in-out hover:bg-gray-2 hover:text-body-color"
               >
                 Create your Player or Scout Profile
               </Link>

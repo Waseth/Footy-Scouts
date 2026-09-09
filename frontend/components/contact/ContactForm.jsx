@@ -1,5 +1,7 @@
 "use client";
 
+import CustomSelect from "@/components/CustomSelect";
+
 const labelClass =
   "mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-white/50";
 
@@ -7,6 +9,13 @@ const inputClass =
   "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#D4AF6A]/60 focus:bg-white/8";
 
 export default function ContactForm() {
+  const roleOptions = [
+    { value: "player", label: "Player" },
+    { value: "scout", label: "Scout / Agent" },
+    { value: "club", label: "Club / Academy" },
+    { value: "other", label: "Other" },
+  ];
+
   return (
     <form
       action="#"
@@ -23,7 +32,7 @@ export default function ContactForm() {
             id="first-name"
             name="first-name"
             required
-            placeholder="Jane"
+            placeholder="Vincent"
             className={inputClass}
           />
         </div>
@@ -37,7 +46,7 @@ export default function ContactForm() {
             id="last-name"
             name="last-name"
             required
-            placeholder="Doe"
+            placeholder="Kuamba"
             className={inputClass}
           />
         </div>
@@ -52,7 +61,7 @@ export default function ContactForm() {
           id="email"
           name="email"
           required
-          placeholder="jane@example.com"
+          placeholder="player@example.com"
           className={inputClass}
         />
       </div>
@@ -64,28 +73,13 @@ export default function ContactForm() {
             (optional)
           </span>
         </label>
-        <select
-          id="role"
-          name="role"
-          defaultValue=""
-          className={`${inputClass} appearance-none`}
-        >
-          <option value="" disabled className="bg-[#242030]">
-            Select one
-          </option>
-          <option value="player" className="bg-[#242030]">
-            Player
-          </option>
-          <option value="scout" className="bg-[#242030]">
-            Scout / Agent
-          </option>
-          <option value="club" className="bg-[#242030]">
-            Club / Academy
-          </option>
-          <option value="other" className="bg-[#242030]">
-            Other
-          </option>
-        </select>
+        <CustomSelect
+          value=""
+          onChange={() => {}}
+          options={roleOptions}
+          placeholder="Select one"
+          className="w-full"
+        />
       </div>
 
       <div>
@@ -104,7 +98,7 @@ export default function ContactForm() {
 
       <button
         type="submit"
-        className="w-full rounded-xl bg-white py-4 text-sm font-semibold uppercase tracking-[0.14em] text-dark shadow-1 transition hover:bg-gray-2 hover:text-body-color focus:outline-none focus:ring-2 focus:ring-[#D4AF6A] focus:ring-offset-2 focus:ring-offset-[#1C1928]"
+        className="w-full rounded-xl bg-[#D4AF6A] py-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#1C1928] shadow-1 transition hover:bg-[#D4AF6A]/90 focus:outline-none focus:ring-2 focus:ring-[#D4AF6A] focus:ring-offset-2 focus:ring-offset-[#1C1928]"
       >
         Send message
       </button>

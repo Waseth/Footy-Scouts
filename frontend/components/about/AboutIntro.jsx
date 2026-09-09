@@ -10,7 +10,7 @@ export default function AboutIntro() {
                 Footy Scouts
               </h2>
 
-              <p className="gold-font mb-1 text-base font-extrabold uppercase leading-relaxed">
+              <p className="gold-font mb-1 text-[#D4AF6A] font-extrabold uppercase leading-relaxed">
                 Vision
               </p>
               <p className="mb-10 text-base leading-relaxed text-white/60">
@@ -18,7 +18,7 @@ export default function AboutIntro() {
                 opportunity to succeed regardless of their background or location.
               </p>
 
-              <p className="gold-font mb-1 text-base font-extrabold uppercase leading-relaxed">
+              <p className="gold-font mb-1 text-[#D4AF6A] font-extrabold uppercase leading-relaxed">
                 Mission
               </p>
               <p className="mb-10 text-base leading-relaxed text-white/60">

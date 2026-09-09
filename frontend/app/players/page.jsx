@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import PlayerCard from '@/components/PlayerCard';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState([]);
@@ -18,9 +19,16 @@ export default function PlayersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const positions = [
-    'Goalkeeper', 'Centre-back', 'Full-back', 'Defensive Midfielder',
-    'Central Midfielder', 'Attacking Midfielder', 'Winger', 'Striker'
+  const positionOptions = [
+    { value: '', label: 'All Positions' },
+    { value: 'Goalkeeper', label: 'Goalkeeper' },
+    { value: 'Centre-back', label: 'Centre-back' },
+    { value: 'Full-back', label: 'Full-back' },
+    { value: 'Defensive Midfielder', label: 'Defensive Midfielder' },
+    { value: 'Central Midfielder', label: 'Central Midfielder' },
+    { value: 'Attacking Midfielder', label: 'Attacking Midfielder' },
+    { value: 'Winger', label: 'Winger' },
+    { value: 'Striker', label: 'Striker' },
   ];
 
   useEffect(() => {
@@ -66,8 +74,8 @@ export default function PlayersPage() {
       <div className="container mx-auto px-4 py-8 pt-24">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Players</h1>
-          <p className="text-white/60 mt-1">Discover talented football players from around the world</p>
+          <h1 className="text-3xl font-bold text-[#D4AF6A]">Players</h1>
+          <p className="text-white mt-1">Discover talented football players from around the world</p>
         </div>
 
         {/* Search and Filters */}
@@ -84,16 +92,13 @@ export default function PlayersPage() {
               />
             </div>
             <div className="flex gap-3 flex-wrap">
-              <select
+              <CustomSelect
                 value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                className="px-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white focus:border-[#D4AF6A]/60 outline-none transition"
-              >
-                <option value="">All Positions</option>
-                {positions.map((pos) => (
-                  <option key={pos} value={pos}>{pos}</option>
-                ))}
-              </select>
+                onChange={setPosition}
+                options={positionOptions}
+                placeholder="All Positions"
+                className="min-w-[150px]"
+              />
               <input
                 type="text"
                 value={nationality}
@@ -103,14 +108,14 @@ export default function PlayersPage() {
               />
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] font-semibold hover:bg-[#D4AF6A]/90 transition"
+                className="px-6 py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition cursor-pointer"
               >
                 Search
               </button>
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="px-4 py-2.5 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition"
+                className="px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer"
               >
                 Clear Filters
               </button>
@@ -142,7 +147,7 @@ export default function PlayersPage() {
           </div>
         ) : players.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-white/60 text-lg">No players found</p>
+            <p className="text-white text-lg">No players found</p>
             <p className="text-white/40 text-sm mt-1">Try adjusting your search filters</p>
           </div>
         ) : (
@@ -159,7 +164,7 @@ export default function PlayersPage() {
             <button
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -169,7 +174,7 @@ export default function PlayersPage() {
             <button
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronRight className="w-5 h-5" />
             </button>

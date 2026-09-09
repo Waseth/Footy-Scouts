@@ -14,7 +14,7 @@ export default function ContactPage() {
         <div className="container mx-auto px-6 py-18 sm:px-8 sm:py-22 lg:px-12 lg:py-24">
           <div className="grid items-start gap-14 lg:grid-cols-2 lg:gap-24">
             <div className="lg:sticky lg:top-24">
-              <SectionEyebrow>Send us a message</SectionEyebrow>
+              <SectionEyebrow> Send us a message</SectionEyebrow>
 
               <h1 className="mb-5 text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
                 We&apos;d love to
@@ -44,10 +44,10 @@ export default function ContactPage() {
                     Prefer to talk?
                   </p>
                   <a
-                    href="tel:+254712345678"
+                    href="tel:+254757283949"
                     className="gold-font text-sm font-semibold tracking-wide transition-colors hover:text-white"
                   >
-                    +254 712 345 678
+                    +254 757 283 949
                   </a>
                 </div>
               </div>

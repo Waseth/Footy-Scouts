@@ -51,7 +51,7 @@ const items = [
     title: "Call us",
     content: (
       <a href="tel:+254712345678" className="block transition-colors hover:text-[#D4AF6A]">
-        +254 712 345 678
+        +254 757 283 949
       </a>
     ),
   },
