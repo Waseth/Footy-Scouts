@@ -72,8 +72,14 @@ export default function SignUpForm() {
       const data = await res.json();
 
       if (res.ok && data.data) {
+        if (data.data.access_token) {
+          localStorage.setItem("access_token", data.data.access_token);
+        }
+        if (data.data.refresh_token) {
+          localStorage.setItem("refresh_token", data.data.refresh_token);
+        }
         if (data.data.user) {
-          localStorage.setItem('user', JSON.stringify(data.data.user));
+          localStorage.setItem("user", JSON.stringify(data.data.user));
         }
         router.push("/onboarding");
       } else {
@@ -203,7 +209,7 @@ export default function SignUpForm() {
             </label>
           </div>
 
-          <Button type="submit" size="sm" disabled={loading}>
+          <Button type="submit" size="sm" variant="gold" disabled={loading}>
             {loading ? "Signing up..." : "Sign Up"}
           </Button>
         </form>

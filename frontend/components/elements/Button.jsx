@@ -12,12 +12,13 @@ export default function Button({
     md: "px-7 py-3.5 text-base",
   };
 
-  // primary/outline mirror the "Register Now" / "Find out more" buttons on the homepage hero
   const variantClasses = {
     primary:
       "bg-white text-dark shadow-1 hover:bg-gray-2 hover:text-body-color",
     outline:
       "bg-white/12 text-white hover:bg-white hover:text-dark",
+    gold:
+      "bg-[#D4AF6A] text-[#1C1928] font-semibold hover:bg-[#c9a45f] shadow-1",
   };
 
   return (
@@ -25,7 +26,7 @@ export default function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex w-full items-center justify-center gap-2 rounded-md font-medium transition duration-300 ease-in-out ${sizeClasses[size]} ${variantClasses[variant]} ${
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-md font-medium transition duration-300 ease-in-out cursor-pointer ${sizeClasses[size]} ${variantClasses[variant]} ${
         disabled ? "cursor-not-allowed opacity-50" : ""
       } ${className}`}
     >

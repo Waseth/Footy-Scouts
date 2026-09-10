@@ -1,6 +1,7 @@
 import os
 import sentry_sdk
 from flask import Flask, jsonify
+from flask_cors import CORS
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from .config import config
@@ -21,6 +22,20 @@ def create_app(config_name=None):
             integrations=[FlaskIntegration()],
             traces_sample_rate=0.1,
         )
+
+    # ── CORS ──
+    frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": [
+            frontend_url,
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    )
 
     # Initialize extensions
     init_extensions(app)
