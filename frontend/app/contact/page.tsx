@@ -1,15 +1,19 @@
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import SectionEyebrow from "@/components/contact/SectionEyebrow";
 import ContactForm from "@/components/contact/ContactForm";
 import ContactInfoGrid from "@/components/contact/ContactInfoGrid";
 
 export const metadata = {
   title: "Footy Scouts | Contact",
-  description: "Get in touch with the Footy Scouts team",
+  description: "Get in touch with the FootyScouts team",
 };
 
 export default function ContactPage() {
   return (
     <div className="min-h-screen bg-[#1C1928]">
+      <Navbar />
+
       <section className="bg-[#1C1928] p-8">
         <div className="container mx-auto px-6 py-18 sm:px-8 sm:py-22 lg:px-12 lg:py-24">
           <div className="grid items-start gap-14 lg:grid-cols-2 lg:gap-24">
@@ -34,7 +38,7 @@ export default function ContactPage() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
+                      d="M2.25 6.75c0 8.2846.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
                     />
                   </svg>
                 </div>
@@ -59,6 +63,8 @@ export default function ContactPage() {
       </section>
 
       <ContactInfoGrid />
+
+      <Footer />
     </div>
   );
 }

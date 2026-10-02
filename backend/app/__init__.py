@@ -23,21 +23,10 @@ def create_app(config_name=None):
             traces_sample_rate=0.1,
         )
 
-    # ── CORS ──
-    frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": [
-            frontend_url,
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ]}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    )
-
-    # Initialize extensions
+    # Initialize extensions (DB, JWT, CORS, rate limiter, etc.)
+    # NOTE: CORS is configured inside init_extensions() via extensions.cors.
+    # Do NOT create a second CORS(...) call here — that causes conflicting
+    # after_request handlers and can raise RuntimeError at startup.
     init_extensions(app)
 
     # Register blueprints

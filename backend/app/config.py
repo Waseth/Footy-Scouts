@@ -90,8 +90,7 @@ class Config:
     MONTHLY_PRICE_USD = float(os.environ.get('MONTHLY_PRICE_USD', 7.50))
     ANNUAL_PRICE_USD = float(os.environ.get('ANNUAL_PRICE_USD', 75.00))
 
-    # Rate Limiting
-    RATELIMIT_DEFAULT = "200 per day;50 per hour"
+    # Rate Limiting — storage
     RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL', 'memory://')
 
     # Pagination
@@ -111,6 +110,12 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = True
+    # Disable rate limiting entirely in development.
+    # Flask-Limiter skips ALL limits (global default + @limiter.limit decorators)
+    # when this is False. Prevents 429s while iterating / testing.
+    RATELIMIT_ENABLED = False
+    # Still provide a default so prod-parity checks can read the value.
+    RATELIMIT_DEFAULT = "200 per day;50 per hour"
 
 
 class ProductionConfig(Config):
@@ -119,12 +124,16 @@ class ProductionConfig(Config):
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SECURE = True
+    # Strict rate limiting in production.
+    RATELIMIT_ENABLED = True
+    RATELIMIT_DEFAULT = "200 per day;50 per hour"
 
 
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=5)
+    RATELIMIT_ENABLED = False
 
 
 config = {

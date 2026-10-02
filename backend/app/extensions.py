@@ -21,12 +21,18 @@ def init_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    limiter.init_app(app)
     mail.init_app(app)
 
-    # ✅ Allow all origins for development
+    # ── Rate limiting ──
+    # Only register Flask-Limiter when explicitly enabled.
+    # DevelopmentConfig/TestingConfig set RATELIMIT_ENABLED=False so dev
+    # and test runs never get 429s from global defaults or @limiter.limit decorators.
+    if app.config.get('RATELIMIT_ENABLED', True):
+        limiter.init_app(app)
+
+    # ── CORS ──
     cors.init_app(app, resources={
-        r"/*": {  # ← Changed from r"/api/*" to r"/*"
+        r"/*": {
             "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "*"],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Accept"],
@@ -35,7 +41,7 @@ def init_extensions(app):
         }
     })
 
-    # JWT callbacks
+    # ── JWT callbacks ──
     @jwt.token_in_blocklist_loader
     def check_if_token_revoked(jwt_header, jwt_payload):
         jti = jwt_payload["jti"]
