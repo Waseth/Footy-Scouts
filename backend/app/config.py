@@ -6,16 +6,43 @@ load_dotenv()
 
 
 def get_int_env(key, default):
-    """Safely get integer from environment variable, with fallback."""
     value = os.environ.get(key)
     if value is None:
         return default
     try:
         return int(value)
     except ValueError:
-        # Log the error but use default
         print(f"WARNING: {key} has invalid value '{value}'. Using default {default}.")
         return default
+
+
+def get_bool_env(key, default=False):
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return v.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _engine_options(db_url: str) -> dict:
+    """
+    Return SQLAlchemy engine options appropriate for the given DB URL.
+    SQLite (esp. :memory:) doesn't support pool_size/max_overflow.
+    """
+    if not db_url or db_url.startswith('sqlite'):
+        # SQLite: StaticPool, no pool sizing
+        return {
+            'pool_pre_ping': True,
+        }
+    # Postgres / MySQL: full pool config
+    return {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_size': 10,
+        'max_overflow': 20,
+    }
+
+
+_DEFAULT_DB_URL = os.environ.get('DATABASE_URL', 'postgresql://localhost/footy_scout_db')
 
 
 class Config:
@@ -25,14 +52,9 @@ class Config:
     TESTING = False
 
     # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'postgresql://localhost/footy_scout_db')
+    SQLALCHEMY_DATABASE_URI = _DEFAULT_DB_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_size': 10,
-        'max_overflow': 20,
-    }
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_options(_DEFAULT_DB_URL)
 
     # JWT
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-change-in-prod')
@@ -46,25 +68,18 @@ class Config:
     CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
     CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
 
-    # Stripe
-    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-    STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
-    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+    # Paystack
+    PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
+    PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
+    PAYSTACK_CURRENCY = os.environ.get('PAYSTACK_CURRENCY', 'KES')
+    PAYSTACK_CALLBACK_URL = os.environ.get(
+        'PAYSTACK_CALLBACK_URL',
+        f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/payment/paystack/callback"
+    )
+    PAYSTACK_WEBHOOK_URL = os.environ.get('PAYSTACK_WEBHOOK_URL')
+    PAYSTACK_SKIP_WEBHOOK_SIGNATURE = get_bool_env('PAYSTACK_SKIP_WEBHOOK_SIGNATURE', False)
 
-    # PayPal
-    PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
-    PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET')
-    PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')
-
-    # M-Pesa
-    MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY')
-    MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET')
-    MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE')
-    MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY')
-    MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL')
-    MPESA_ENV = os.environ.get('MPESA_ENV', 'sandbox')
-
-    # Email - DISABLED
+    # Email
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
@@ -84,13 +99,11 @@ class Config:
     ADMIN_FIRST_NAME = os.environ.get('ADMIN_FIRST_NAME', 'Super')
     ADMIN_LAST_NAME = os.environ.get('ADMIN_LAST_NAME', 'Admin')
 
-    # Pricing
+    # Pricing (KES)
     MONTHLY_PRICE_KES = float(os.environ.get('MONTHLY_PRICE_KES', 1000))
     ANNUAL_PRICE_KES = float(os.environ.get('ANNUAL_PRICE_KES', 10000))
-    MONTHLY_PRICE_USD = float(os.environ.get('MONTHLY_PRICE_USD', 7.50))
-    ANNUAL_PRICE_USD = float(os.environ.get('ANNUAL_PRICE_USD', 75.00))
 
-    # Rate Limiting — storage
+    # Rate Limiting
     RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL', 'memory://')
 
     # Pagination
@@ -98,7 +111,7 @@ class Config:
     MAX_PAGE_SIZE = 100
 
     # File Upload
-    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024
     ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'webm'}
     ALLOWED_DOC_EXTENSIONS = {'pdf'}
@@ -110,21 +123,15 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = True
-    # Disable rate limiting entirely in development.
-    # Flask-Limiter skips ALL limits (global default + @limiter.limit decorators)
-    # when this is False. Prevents 429s while iterating / testing.
     RATELIMIT_ENABLED = False
-    # Still provide a default so prod-parity checks can read the value.
     RATELIMIT_DEFAULT = "200 per day;50 per hour"
 
 
 class ProductionConfig(Config):
     DEBUG = False
-    # Force HTTPS
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SECURE = True
-    # Strict rate limiting in production.
     RATELIMIT_ENABLED = True
     RATELIMIT_DEFAULT = "200 per day;50 per hour"
 
@@ -132,6 +139,8 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    # IMPORTANT: SQLite :memory: doesn't accept pool_size/max_overflow
+    SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': False}
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=5)
     RATELIMIT_ENABLED = False
 

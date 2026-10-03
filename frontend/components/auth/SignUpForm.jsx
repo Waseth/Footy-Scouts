@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
@@ -9,18 +9,25 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/InputField";
 import Button from "@/components/elements/Button";
 
-const signupSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Please confirm your password"),
-  role: z.enum(["PLAYER", "SCOUT", "INSTITUTION"]),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-});
+const signupSchema = z
+  .object({
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(6, "Please confirm your password"),
+    role: z.enum(["PLAYER", "SCOUT", "INSTITUTION"]),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 export default function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const redirectTo = searchParams.get("redirect");
+  const intent = searchParams.get("intent");
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
@@ -42,7 +49,10 @@ export default function SignUpForm() {
     setErrors({ email: "", password: "", confirmPassword: "", role: "", general: "" });
 
     if (!isChecked) {
-      setErrors((prev) => ({ ...prev, general: "Please accept the Terms and Privacy Policy to continue." }));
+      setErrors((prev) => ({
+        ...prev,
+        general: "Please accept the Terms and Privacy Policy to continue.",
+      }));
       return;
     }
 
@@ -81,9 +91,24 @@ export default function SignUpForm() {
         if (data.data.user) {
           localStorage.setItem("user", JSON.stringify(data.data.user));
         }
-        router.push("/onboarding");
+
+        // Routing priority after signup:
+        //   1. If a redirect target was provided, honour it (preserve intent).
+        //   2. Otherwise go to onboarding (new user flow).
+        if (redirectTo) {
+          const sep = redirectTo.includes("?") ? "&" : "?";
+          const url = intent
+            ? `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`
+            : redirectTo;
+          router.push(url);
+        } else {
+          router.push("/onboarding");
+        }
       } else {
-        setErrors((prev) => ({ ...prev, general: data.error || data.message || "Signup failed" }));
+        setErrors((prev) => ({
+          ...prev,
+          general: data.error || data.message || "Signup failed",
+        }));
       }
     } catch (err) {
       console.error(err);
@@ -93,14 +118,35 @@ export default function SignUpForm() {
     }
   };
 
+  // Build login link preserving redirect+intent
+  const loginHref = (() => {
+    const params = new URLSearchParams();
+    if (redirectTo) params.set("redirect", redirectTo);
+    if (intent) params.set("intent", intent);
+    const qs = params.toString();
+    return qs ? `/login?${qs}` : "/login";
+  })();
+
   return (
     <div className="flex w-full flex-col justify-center overflow-y-auto px-6 py-16 lg:w-1/2 lg:px-16">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-8">
-          <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl">Create your profile</h1>
+          <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl">
+            Create your profile
+          </h1>
           <p className="text-sm text-white/60">
             Register to get discovered by scouts, agents, and clubs.
           </p>
+          {intent === "view_full_profile" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Create an account to view full player details.
+            </p>
+          )}
+          {intent === "contact_scout" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Create an account to contact this scout. A premium account is required to send a message.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSignup} className="space-y-5">
@@ -168,7 +214,9 @@ export default function SignUpForm() {
                 {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
               </span>
             </div>
-            {errors.confirmPassword && <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>}
+            {errors.confirmPassword && (
+              <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>
+            )}
           </div>
 
           <div>
@@ -216,7 +264,7 @@ export default function SignUpForm() {
 
         <p className="mt-6 text-center text-sm text-white/80 sm:text-left">
           Already have an account?{" "}
-          <Link href="/login" className="gold-font hover:underline">
+          <Link href={loginHref} className="gold-font hover:underline">
             Login
           </Link>
         </p>

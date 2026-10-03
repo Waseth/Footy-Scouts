@@ -1,7 +1,6 @@
 import os
 import sentry_sdk
 from flask import Flask, jsonify
-from flask_cors import CORS
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from .config import config
@@ -15,7 +14,6 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    # Sentry error monitoring (production)
     if app.config.get('SENTRY_DSN'):
         sentry_sdk.init(
             dsn=app.config['SENTRY_DSN'],
@@ -23,19 +21,10 @@ def create_app(config_name=None):
             traces_sample_rate=0.1,
         )
 
-    # Initialize extensions (DB, JWT, CORS, rate limiter, etc.)
-    # NOTE: CORS is configured inside init_extensions() via extensions.cors.
-    # Do NOT create a second CORS(...) call here — that causes conflicting
-    # after_request handlers and can raise RuntimeError at startup.
     init_extensions(app)
-
-    # Register blueprints
     _register_blueprints(app)
-
-    # Register error handlers
     _register_error_handlers(app)
 
-    # Health check
     @app.route('/health')
     def health():
         return jsonify({"status": "healthy", "service": "Footy Scout API"}), 200
@@ -54,6 +43,7 @@ def _register_blueprints(app):
     from .api.v1.payments.routes import payments_bp
     from .api.v1.admin.routes import admin_bp
     from .api.v1.search.routes import search_bp
+    from .api.v1.organizers.routes import organizers_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     app.register_blueprint(players_bp, url_prefix='/api/v1/players')
@@ -65,6 +55,7 @@ def _register_blueprints(app):
     app.register_blueprint(payments_bp, url_prefix='/api/v1/payments')
     app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     app.register_blueprint(search_bp, url_prefix='/api/v1/search')
+    app.register_blueprint(organizers_bp, url_prefix='/api/v1/organizers')
 
 
 def _register_error_handlers(app):

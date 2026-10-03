@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
@@ -18,12 +18,26 @@ const loginSchema = z.object({
 
 export default function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Where to send the user after login (default: /dashboard)
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  // Optional intent (e.g. "contact_scout", "upload_highlights") — passed back through
+  const intent = searchParams.get("intent");
+
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({ email: "", password: "", general: "" });
+
+  const buildRedirectUrl = () => {
+    if (!intent) return redirectTo;
+    // Preserve intent so the destination page can act on it
+    const sep = redirectTo.includes("?") ? "&" : "?";
+    return `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`;
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -53,36 +67,35 @@ export default function SignInForm() {
 
       if (res.ok && data.data) {
         if (data.data.access_token) {
-          localStorage.setItem('access_token', data.data.access_token);
+          localStorage.setItem("access_token", data.data.access_token);
         }
         if (data.data.refresh_token) {
-          localStorage.setItem('refresh_token', data.data.refresh_token);
+          localStorage.setItem("refresh_token", data.data.refresh_token);
         }
         if (data.data.user) {
-          localStorage.setItem('user', JSON.stringify(data.data.user));
+          localStorage.setItem("user", JSON.stringify(data.data.user));
         }
-        router.push("/dashboard");
+        router.push(buildRedirectUrl());
       } else {
-        // Handle specific error messages
         if (data.error === "Invalid email or password") {
           setErrors((prev) => ({
             ...prev,
-            general: "Invalid email or password. Please try again or create an account."
+            general: "Invalid email or password. Please try again or create an account.",
           }));
         } else {
           setErrors((prev) => ({
             ...prev,
-            general: data.error || data.message || "Login failed"
+            general: data.error || data.message || "Login failed",
           }));
         }
       }
     } catch (err) {
       console.error("Login error:", err);
-      // Check if it's a network error (backend not reachable)
       if (err.message === "Failed to fetch" || err.name === "TypeError") {
         setErrors((prev) => ({
           ...prev,
-          general: "Cannot connect to the server. Please make sure the backend is running on http://localhost:5000"
+          general:
+            "Cannot connect to the server. Please make sure the backend is running on http://localhost:5000",
         }));
       } else {
         setErrors((prev) => ({ ...prev, general: "Error during login" }));
@@ -92,6 +105,15 @@ export default function SignInForm() {
     }
   };
 
+  // Build signup link preserving redirect+intent so signup → same destination
+  const signupHref = (() => {
+    const params = new URLSearchParams();
+    if (redirectTo) params.set("redirect", redirectTo);
+    if (intent) params.set("intent", intent);
+    const qs = params.toString();
+    return qs ? `/signup?${qs}` : "/signup";
+  })();
+
   return (
     <div className="flex w-full flex-col justify-center px-6 py-16 lg:w-1/2 lg:px-16">
       <div className="mx-auto w-full max-w-md">
@@ -100,6 +122,21 @@ export default function SignInForm() {
           <p className="text-sm text-white/60">
             Enter your email and password to access your profile.
           </p>
+          {intent === "view_full_profile" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in to view full player details.
+            </p>
+          )}
+          {intent === "contact_scout" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in to contact this scout. A premium account is required to send a message.
+            </p>
+          )}
+          {intent === "upload_highlights" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in to upload highlights. A premium account is required to upload video.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -166,7 +203,7 @@ export default function SignInForm() {
 
         <p className="mt-6 text-center text-sm text-white/60 sm:text-left">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="gold-font hover:underline">
+          <Link href={signupHref} className="gold-font hover:underline">
             Sign Up
           </Link>
         </p>

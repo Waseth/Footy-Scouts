@@ -29,7 +29,6 @@ class Player(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    # ✅ Only this relationship - no media relationship
     user = db.relationship('User', backref=db.backref('player_profile', uselist=False))
 
     __table_args__ = (
@@ -51,26 +50,58 @@ class Player(db.Model):
     def __repr__(self):
         return f'<Player {self.full_name}>'
 
-    def to_dict(self, include_contact=False):
+    def to_dict(self, viewer=None, viewer_is_authenticated=False, include_contact=False):
+        """
+        Viewer-aware serialization.
+
+        Tiers:
+          - Guest (viewer=None, viewer_is_authenticated=False):
+              name, position, nationality, current_team, biography,
+              profile_picture_url, profile_views, is_premium, is_featured
+          - Registered (viewer_is_authenticated=True):
+              + age, gender, date_of_birth, school
+          - Owner (viewer == self.user):
+              + contact_number, email, user_id
+          - include_contact=True (explicit override, e.g. owner view):
+              + contact_number, email
+        """
+        is_owner = (
+            viewer is not None
+            and viewer_is_authenticated
+            and getattr(self, 'user_id', None) == getattr(viewer, 'id', None)
+        )
+
         data = {
             'id': self.id,
-            'user_id': self.user_id,
             'full_name': self.full_name,
-            'nationality': self.nationality,
-            'age': self.age,
-            'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
-            'gender': self.gender,
             'position': self.position,
+            'nationality': self.nationality,
             'current_team': self.current_team,
-            'school': self.school,
             'biography': self.biography,
             'profile_picture_url': self.profile_picture_url,
-            'is_featured': self.is_featured,
-            'profile_views': self.profile_views,
+            'profile_views': self.profile_views or 0,
+            'is_featured': bool(self.is_featured),
             'is_premium': self.user.is_premium() if self.user else False,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'requires_login_for_full_details': not viewer_is_authenticated,
         }
-        if include_contact or self.show_contact:
-            data['contact_number'] = self.contact_number
-            data['email'] = self.user.email if self.user else None
+
+        # Registered users get "full details" (still not contact info)
+        if viewer_is_authenticated:
+            data.update({
+                'age': self.age,
+                'gender': self.gender,
+                'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
+                'school': self.school,
+            })
+
+        # Owner or explicit override → contact info
+        if is_owner or include_contact:
+            data.update({
+                'user_id': self.user_id,
+                'contact_number': self.contact_number,
+                'email': self.user.email if self.user else None,
+                'show_contact': bool(self.show_contact),
+            })
+
         return data

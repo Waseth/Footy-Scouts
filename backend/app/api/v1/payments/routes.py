@@ -1,20 +1,25 @@
 import json
+import uuid
 from datetime import datetime, timezone
 from flask import Blueprint, request, current_app
 from flask_jwt_extended import jwt_required
 
 from ....extensions import db, limiter
 from ....models import Payment, Subscription, User
-from ....services.mpesa_service import MpesaService
-from ....services.stripe_service import StripeService
-from ....services.paypal_service import PayPalService
-from ....services.email_service import EmailService
+from ....services.paystack_service import PaystackService
 from ....services.notification_service import NotificationService
 from ....utils.decorators import get_current_user
 from ....utils.helpers import success_response, error_response, get_subscription_end_date
-from ....utils.validators import validate_phone
 
 payments_bp = Blueprint('payments', __name__)
+
+
+# ─────────────────────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────────────────────
+
+def _make_reference(purpose: str) -> str:
+    return f"FS-{purpose[:4]}-{uuid.uuid4().hex[:10].upper()}"
 
 
 def _activate_subscription(user: User, plan: str, payment: Payment):
@@ -34,307 +39,261 @@ def _activate_subscription(user: User, plan: str, payment: Payment):
     payment.subscription_id = sub.id
     db.session.commit()
 
-    # Notify user
-    NotificationService.notify_subscription_activated(user.id, plan)
-    # EmailService.send_subscription_confirmation(user.email, plan, sub.end_date)
+    try:
+        NotificationService.notify_subscription_activated(user.id, plan)
+    except Exception:
+        pass  # Don't fail the payment if notification fails
+
     return sub
 
 
+def _price_for_plan(plan: str) -> float:
+    if plan == 'MONTHLY':
+        return current_app.config['MONTHLY_PRICE_KES']
+    if plan == 'ANNUAL':
+        return current_app.config['ANNUAL_PRICE_KES']
+    raise ValueError("Unsupported plan")
+
+
 # ─────────────────────────────────────────────────────────────
-#  M-PESA
+#  Initialize
 # ─────────────────────────────────────────────────────────────
 
-@payments_bp.route('/mpesa/initiate', methods=['POST'])
+@payments_bp.route('/paystack/initialize', methods=['POST'])
 @jwt_required()
-@limiter.limit("5 per minute")
-def mpesa_initiate():
-    """Initiate M-Pesa STK Push payment."""
+@limiter.limit("10 per minute")
+def paystack_initialize():
+    """
+    Initialize a Paystack transaction for a subscription plan.
+
+    SECURITY: amount is derived from server-side config by `plan`.
+    Client cannot set the amount.
+    """
     user = get_current_user()
-    data = request.get_json()
+    data = request.get_json() or {}
+    plan = (data.get('plan') or '').upper()
 
-    plan = data.get('plan', '').upper()
-    phone = data.get('phone_number', '').strip()
-
-    if plan not in ['MONTHLY', 'ANNUAL']:
+    if plan not in ('MONTHLY', 'ANNUAL'):
         return error_response("plan must be MONTHLY or ANNUAL", 400)
-    if not phone or not validate_phone(phone):
-        return error_response("Valid phone number required (e.g. 0712345678)", 400)
 
-    amount = current_app.config['MONTHLY_PRICE_KES'] if plan == 'MONTHLY' else current_app.config['ANNUAL_PRICE_KES']
+    try:
+        amount = _price_for_plan(plan)
+    except ValueError as e:
+        return error_response(str(e), 400)
 
-    # Create a pending payment record first
+    reference = _make_reference('SUB')
+    callback_url = current_app.config.get(
+        'PAYSTACK_CALLBACK_URL',
+        f"{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/payment/paystack/callback",
+    )
+
     payment = Payment(
         user_id=user.id,
         amount=amount,
         currency=Payment.CURRENCY_KES,
-        method=Payment.METHOD_MPESA,
+        method=Payment.METHOD_PAYSTACK,
         status=Payment.STATUS_PENDING,
+        purpose=Payment.PURPOSE_SUBSCRIPTION,
         plan=plan,
-        phone_number=phone,
+        paystack_reference=reference,
+        email=user.email,
     )
     db.session.add(payment)
     db.session.commit()
 
-    result = MpesaService.stk_push(
-        phone_number=phone,
+    result = PaystackService.initialize_transaction(
+        email=user.email,
         amount=amount,
-        account_ref=f"FS{user.id[:8].upper()}",
-        description=f"FootyScout {plan}",
+        reference=reference,
+        callback_url=callback_url,
+        metadata={
+            'payment_id': payment.id,
+            'user_id': user.id,
+            'plan': plan,
+            'purpose': 'SUBSCRIPTION',
+        },
+        channels=['card', 'mobile_money', 'bank'],
     )
 
     if not result.get('success'):
         payment.status = Payment.STATUS_FAILED
         payment.failure_reason = result.get('error')
         db.session.commit()
-        return error_response(f"M-Pesa request failed: {result.get('error')}", 502)
+        return error_response(f"Paystack error: {result.get('error')}", 502)
 
-    payment.mpesa_checkout_id = result['checkout_request_id']
+    payment.paystack_access_code = result.get('access_code')
+    payment.paystack_authorization_url = result.get('authorization_url')
+    payment.raw_response = json.dumps(result.get('raw'))
     db.session.commit()
 
     return success_response(data={
         'payment_id': payment.id,
-        'checkout_request_id': result['checkout_request_id'],
-        'customer_message': result.get('customer_message', 'Check your phone for the M-Pesa prompt.'),
-        'amount': amount,
-        'currency': 'KES',
-    }, status_code=202)
-
-
-@payments_bp.route('/mpesa/callback', methods=['POST'])
-def mpesa_callback():
-    """M-Pesa callback URL — called by Safaricom servers."""
-    data = request.get_json(silent=True) or {}
-    result = MpesaService.process_callback(data)
-
-    checkout_id = result.get('checkout_request_id')
-    payment = Payment.query.filter_by(mpesa_checkout_id=checkout_id).first()
-    if not payment:
-        return {'ResultCode': 0, 'ResultDesc': 'Accepted'}, 200  # Always return 200 to Safaricom
-
-    if result.get('success'):
-        payment.status = Payment.STATUS_COMPLETED
-        payment.mpesa_receipt = result.get('mpesa_receipt')
-        payment.transaction_id = result.get('mpesa_receipt')
-        payment.completed_at = datetime.now(timezone.utc)
-        db.session.commit()
-
-        user = User.query.get(payment.user_id)
-        if user:
-            _activate_subscription(user, payment.plan, payment)
-    else:
-        payment.status = Payment.STATUS_FAILED
-        payment.failure_reason = result.get('result_desc')
-        db.session.commit()
-
-    return {'ResultCode': 0, 'ResultDesc': 'Accepted'}, 200
-
-
-@payments_bp.route('/mpesa/status/<payment_id>', methods=['GET'])
-@jwt_required()
-def mpesa_status(payment_id):
-    """Poll M-Pesa payment status."""
-    user = get_current_user()
-    payment = Payment.query.filter_by(id=payment_id, user_id=user.id).first()
-    if not payment:
-        return error_response("Payment not found", 404)
-
-    return success_response(data={'payment': payment.to_dict()})
-
-
-# ─────────────────────────────────────────────────────────────
-#  STRIPE
-# ─────────────────────────────────────────────────────────────
-
-@payments_bp.route('/stripe/create-intent', methods=['POST'])
-@jwt_required()
-@limiter.limit("5 per minute")
-def stripe_create_intent():
-    """Create a Stripe PaymentIntent and return client_secret to frontend."""
-    user = get_current_user()
-    data = request.get_json()
-    plan = data.get('plan', '').upper()
-
-    if plan not in ['MONTHLY', 'ANNUAL']:
-        return error_response("plan must be MONTHLY or ANNUAL", 400)
-
-    amount_usd = current_app.config['MONTHLY_PRICE_USD'] if plan == 'MONTHLY' else current_app.config['ANNUAL_PRICE_USD']
-
-    # Create pending payment record
-    payment = Payment(
-        user_id=user.id,
-        amount=amount_usd,
-        currency=Payment.CURRENCY_USD,
-        method=Payment.METHOD_STRIPE,
-        status=Payment.STATUS_PENDING,
-        plan=plan,
-    )
-    db.session.add(payment)
-    db.session.flush()
-
-    result = StripeService.create_payment_intent(
-        amount_usd=amount_usd,
-        metadata={'payment_id': payment.id, 'user_id': user.id, 'plan': plan},
-    )
-
-    if not result.get('success'):
-        db.session.rollback()
-        return error_response(f"Stripe error: {result.get('error')}", 502)
-
-    payment.stripe_payment_intent = result['payment_intent_id']
-    db.session.commit()
-
-    return success_response(data={
-        'client_secret': result['client_secret'],
-        'payment_id': payment.id,
-        'amount_usd': amount_usd,
+        'reference': payment.paystack_reference,
+        'authorization_url': payment.paystack_authorization_url,
+        'access_code': payment.paystack_access_code,
+        'amount': float(payment.amount),
+        'currency': payment.currency,
     })
 
 
-@payments_bp.route('/stripe/confirm', methods=['POST'])
+# ─────────────────────────────────────────────────────────────
+#  Verify
+# ─────────────────────────────────────────────────────────────
+
+@payments_bp.route('/paystack/verify/<reference>', methods=['GET'])
 @jwt_required()
-def stripe_confirm():
-    """Confirm a Stripe payment after frontend completes it."""
+def paystack_verify(reference):
+    """
+    Verify a Paystack transaction. Idempotent — safe to call multiple times.
+    """
     user = get_current_user()
-    data = request.get_json()
-    payment_intent_id = data.get('payment_intent_id')
-
-    if not payment_intent_id:
-        return error_response("payment_intent_id required", 400)
-
-    payment = Payment.query.filter_by(
-        stripe_payment_intent=payment_intent_id,
-        user_id=user.id,
-    ).first()
+    payment = Payment.query.filter_by(paystack_reference=reference, user_id=user.id).first()
     if not payment:
-        return error_response("Payment record not found", 404)
+        return error_response("Payment not found", 404)
 
-    result = StripeService.confirm_payment_intent(payment_intent_id)
+    if payment.status == Payment.STATUS_COMPLETED:
+        return success_response(data={
+            'payment': payment.to_dict(),
+            'subscription': payment.subscription.to_dict() if payment.subscription else None,
+        })
+
+    result = PaystackService.verify_transaction(reference)
     if not result.get('success'):
-        return error_response(result.get('error'), 502)
+        return error_response(f"Verification failed: {result.get('error')}", 502)
 
-    if result['status'] == 'succeeded':
-        payment.status = Payment.STATUS_COMPLETED
-        payment.transaction_id = payment_intent_id
-        payment.completed_at = datetime.now(timezone.utc)
-        db.session.commit()
-        _activate_subscription(user, payment.plan, payment)
-        return success_response(message="Payment successful! Subscription activated.")
+    status = result.get('status')
 
-    return success_response(data={'status': result['status']})
-
-
-@payments_bp.route('/stripe/webhook', methods=['POST'])
-def stripe_webhook():
-    """Stripe webhook for async payment events."""
-    payload = request.get_data()
-    sig_header = request.headers.get('Stripe-Signature', '')
-
-    result = StripeService.construct_webhook_event(payload, sig_header)
-    if not result.get('success'):
-        return error_response("Webhook signature verification failed", 400)
-
-    event = result['event']
-    if event['type'] == 'payment_intent.succeeded':
-        pi = event['data']['object']
-        payment = Payment.query.filter_by(stripe_payment_intent=pi['id']).first()
-        if payment and payment.status != Payment.STATUS_COMPLETED:
-            payment.status = Payment.STATUS_COMPLETED
-            payment.transaction_id = pi['id']
-            payment.completed_at = datetime.now(timezone.utc)
+    if status == 'success':
+        expected = float(payment.amount)
+        actual = float(result.get('amount', 0))
+        if abs(expected - actual) > 0.01:
+            payment.status = Payment.STATUS_FAILED
+            payment.failure_reason = f"Amount mismatch: expected {expected}, got {actual}"
             db.session.commit()
-            user = User.query.get(payment.user_id)
-            if user:
-                _activate_subscription(user, payment.plan, payment)
+            return error_response("Payment amount mismatch", 400)
+
+        payment.status = Payment.STATUS_COMPLETED
+        payment.transaction_id = str(result.get('raw', {}).get('data', {}).get('id', '')) or None
+        payment.paystack_channel = result.get('channel')
+        payment.completed_at = datetime.now(timezone.utc)
+        payment.raw_response = json.dumps(result.get('raw'))
+        db.session.commit()
+
+        if payment.purpose == Payment.PURPOSE_SUBSCRIPTION and payment.plan:
+            _activate_subscription(user, payment.plan, payment)
+
+    elif status in ('failed', 'reversed'):
+        payment.status = Payment.STATUS_FAILED
+        payment.failure_reason = result.get('gateway_response') or status
+        db.session.commit()
+
+    elif status == 'abandoned':
+        payment.status = Payment.STATUS_ABANDONED
+        payment.failure_reason = "Customer abandoned checkout"
+        db.session.commit()
+
+    return success_response(data={
+        'payment': payment.to_dict(),
+        'subscription': payment.subscription.to_dict() if payment.subscription else None,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+#  Webhook
+# ─────────────────────────────────────────────────────────────
+
+@payments_bp.route('/paystack/webhook', methods=['POST'])
+def paystack_webhook():
+    """
+    Paystack webhook handler.
+    - Verifies HMAC-SHA512 signature
+    - Idempotent
+    - Re-verifies via API before activating
+    """
+    raw_body = request.get_data()
+    signature = request.headers.get('x-paystack-signature', '')
+
+    skip_sig = current_app.config.get('PAYSTACK_SKIP_WEBHOOK_SIGNATURE', False)
+    if not skip_sig and not PaystackService.verify_webhook_signature(raw_body, signature):
+        return error_response("Invalid signature", 401)
+
+    try:
+        event = json.loads(raw_body.decode('utf-8'))
+    except Exception:
+        return error_response("Invalid JSON", 400)
+
+    event_type = event.get('event')
+    data = event.get('data', {})
+    reference = data.get('reference')
+
+    if event_type != 'charge.success' or not reference:
+        return {'received': True}, 200
+
+    payment = Payment.query.filter_by(paystack_reference=reference).first()
+    if not payment:
+        return {'received': True, 'unknown_reference': True}, 200
+
+    if payment.status == Payment.STATUS_COMPLETED:
+        return {'received': True, 'already_processed': True}, 200
+
+    result = PaystackService.verify_transaction(reference)
+    if not result.get('success') or result.get('status') != 'success':
+        return {'received': True, 'verify_failed': True}, 200
+
+    expected = float(payment.amount)
+    actual = float(result.get('amount', 0))
+    if abs(expected - actual) > 0.01:
+        payment.status = Payment.STATUS_FAILED
+        payment.failure_reason = f"Webhook amount mismatch: {actual} vs {expected}"
+        db.session.commit()
+        return {'received': True, 'amount_mismatch': True}, 200
+
+    payment.status = Payment.STATUS_COMPLETED
+    payment.transaction_id = str(data.get('id')) or payment.transaction_id
+    payment.paystack_channel = data.get('channel') or payment.paystack_channel
+    payment.completed_at = datetime.now(timezone.utc)
+    payment.raw_response = json.dumps(event)
+    db.session.commit()
+
+    if payment.purpose == Payment.PURPOSE_SUBSCRIPTION and payment.plan:
+        user = db.session.get(User, payment.user_id)   # ← fixed
+        if user:
+            _activate_subscription(user, payment.plan, payment)
 
     return {'received': True}, 200
 
 
 # ─────────────────────────────────────────────────────────────
-#  PAYPAL
+#  STUBS — Tournament payments
 # ─────────────────────────────────────────────────────────────
 
-@payments_bp.route('/paypal/create-order', methods=['POST'])
+@payments_bp.route('/paystack/initialize/team-entry', methods=['POST'])
 @jwt_required()
-@limiter.limit("5 per minute")
-def paypal_create_order():
-    """Create a PayPal order and return approve_url."""
-    user = get_current_user()
-    data = request.get_json()
-    plan = data.get('plan', '').upper()
-
-    if plan not in ['MONTHLY', 'ANNUAL']:
-        return error_response("plan must be MONTHLY or ANNUAL", 400)
-
-    amount_usd = current_app.config['MONTHLY_PRICE_USD'] if plan == 'MONTHLY' else current_app.config['ANNUAL_PRICE_USD']
-    frontend_url = current_app.config.get('FRONTEND_URL', '')
-
-    payment = Payment(
-        user_id=user.id,
-        amount=amount_usd,
-        currency=Payment.CURRENCY_USD,
-        method=Payment.METHOD_PAYPAL,
-        status=Payment.STATUS_PENDING,
-        plan=plan,
-    )
-    db.session.add(payment)
-    db.session.flush()
-
-    result = PayPalService.create_order(
-        amount_usd=amount_usd,
-        description=f"FootyScout {plan} Subscription",
-        return_url=f"{frontend_url}/payment/paypal/success?payment_id={payment.id}",
-        cancel_url=f"{frontend_url}/payment/paypal/cancel?payment_id={payment.id}",
+def paystack_initialize_team_entry():
+    return error_response(
+        "Team tournament payments are not yet available. Coming soon.",
+        501,
+        errors={'code': 'NOT_IMPLEMENTED', 'purpose': 'TEAM_TOURNAMENT_ENTRY'},
     )
 
-    if not result.get('success'):
-        db.session.rollback()
-        return error_response(f"PayPal error: {result.get('error')}", 502)
 
-    payment.paypal_order_id = result['order_id']
-    db.session.commit()
-
-    return success_response(data={
-        'order_id': result['order_id'],
-        'approve_url': result['approve_url'],
-        'payment_id': payment.id,
-    })
-
-
-@payments_bp.route('/paypal/capture', methods=['POST'])
+@payments_bp.route('/paystack/initialize/tournament-final', methods=['POST'])
 @jwt_required()
-def paypal_capture():
-    """Capture (complete) PayPal order after user approves on PayPal."""
-    user = get_current_user()
-    data = request.get_json()
-    order_id = data.get('order_id')
+def paystack_initialize_tournament_final():
+    return error_response(
+        "Tournament final payments are not yet available. Coming soon.",
+        501,
+        errors={'code': 'NOT_IMPLEMENTED', 'purpose': 'TOURNAMENT_FINAL'},
+    )
 
-    if not order_id:
-        return error_response("order_id required", 400)
 
-    payment = Payment.query.filter_by(paypal_order_id=order_id, user_id=user.id).first()
-    if not payment:
-        return error_response("Payment record not found", 404)
-
-    result = PayPalService.capture_order(order_id)
-    if not result.get('success'):
-        payment.status = Payment.STATUS_FAILED
-        payment.failure_reason = result.get('error')
-        db.session.commit()
-        return error_response(f"PayPal capture failed: {result.get('error')}", 502)
-
-    payment.status = Payment.STATUS_COMPLETED
-    payment.transaction_id = result.get('capture_id')
-    payment.completed_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    _activate_subscription(user, payment.plan, payment)
-    return success_response(message="Payment successful! Subscription activated.")
-
+# ─────────────────────────────────────────────────────────────
+#  History
+# ─────────────────────────────────────────────────────────────
 
 @payments_bp.route('/history', methods=['GET'])
 @jwt_required()
 def payment_history():
-    """Get current user's payment history."""
     user = get_current_user()
     payments = Payment.query.filter_by(user_id=user.id).order_by(Payment.created_at.desc()).all()
     return success_response(data={'payments': [p.to_dict() for p in payments]})

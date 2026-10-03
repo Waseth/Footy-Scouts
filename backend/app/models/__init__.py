@@ -8,7 +8,10 @@ from .message import Message, Conversation
 from .tournament import Tournament, TournamentParticipant
 from .media import MediaUpload
 from .notification import Notification
-from .admin_action import AdminAction  
+from .admin_action import AdminAction
+from .organizer import OrganizerProfile
+# ... in __all__:
+'OrganizerProfile',
 
 __all__ = [
     'User', 'Role',

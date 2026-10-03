@@ -1,38 +1,50 @@
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 
 from ....extensions import db, limiter
-from ....models import Player, User, Role, MediaUpload
+from ....models import Player, MediaUpload
 from ....services.cloudinary_service import CloudinaryService
-from ....utils.decorators import role_required, get_current_user
+from ....utils.decorators import (
+    capability_required, premium_required, get_current_user, get_optional_viewer,
+)
 from ....utils.helpers import success_response, error_response
 from ....utils.pagination import paginate_query
-from ....utils.validators import (validate_file_extension, validate_file_size,
-                                   ALLOWED_EXTENSIONS_IMAGE, ALLOWED_EXTENSIONS_VIDEO,
-                                   ALLOWED_EXTENSIONS_PDF, MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, MAX_PDF_SIZE)
+from ....utils.validators import (
+    validate_file_extension, validate_file_size,
+    ALLOWED_EXTENSIONS_IMAGE, ALLOWED_EXTENSIONS_VIDEO,
+    ALLOWED_EXTENSIONS_PDF, MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, MAX_PDF_SIZE,
+)
 
 players_bp = Blueprint('players', __name__)
 
 
+# ─────────────────────────────────────────────────────────────
+#  Own profile (player capability required)
+# ─────────────────────────────────────────────────────────────
+
 @players_bp.route('/profile', methods=['GET'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 def get_my_profile():
-    """Get the current player's own profile."""
     user = get_current_user()
-    if not user.player_profile:
-        return error_response("Player profile not found", 404)
-    return success_response(data={'player': user.player_profile.to_dict(include_contact=True)})
+    return success_response(data={
+        'player': user.player_profile.to_dict(
+            viewer=user, viewer_is_authenticated=True, include_contact=True,
+        )
+    })
 
 
 @players_bp.route('/profile', methods=['POST'])
 @jwt_required()
-@role_required(Role.PLAYER)
 def create_profile():
-    """Create player profile (first time)."""
+    """
+    Create player profile.
+    NOTE: This does NOT require the PLAYER role — any authenticated user
+    can create a player profile (multi-capability model).
+    """
     user = get_current_user()
     if user.player_profile:
-        return error_response("Profile already exists. Use PUT to update.", 409)
+        return error_response("Player profile already exists. Use PUT to update.", 409)
 
     data = request.get_json()
     if not data:
@@ -58,61 +70,73 @@ def create_profile():
     db.session.add(player)
     db.session.commit()
 
-    return success_response(data={'player': player.to_dict(include_contact=True)}, status_code=201)
+    return success_response(data={
+        'player': player.to_dict(viewer=user, viewer_is_authenticated=True, include_contact=True)
+    }, status_code=201)
 
 
 @players_bp.route('/profile', methods=['PUT'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 def update_profile():
-    """Update player profile."""
     user = get_current_user()
     player = user.player_profile
-    if not player:
-        return error_response("Player profile not found. Create one first.", 404)
 
-    data = request.get_json()
+    data = request.get_json() or {}
     updatable_fields = [
         'full_name', 'nationality', 'date_of_birth', 'gender', 'position',
-        'current_team', 'school', 'contact_number', 'show_contact', 'biography'
+        'current_team', 'school', 'contact_number', 'show_contact', 'biography',
     ]
-
     for field in updatable_fields:
         if field in data:
             setattr(player, field, data[field])
 
     db.session.commit()
-    return success_response(data={'player': player.to_dict(include_contact=True)})
+    return success_response(data={
+        'player': player.to_dict(viewer=user, viewer_is_authenticated=True, include_contact=True)
+    })
 
+
+# ─────────────────────────────────────────────────────────────
+#  Public / viewer-aware profile fetch
+# ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/<player_id>', methods=['GET'])
 def get_player(player_id):
-    """Get a player's public profile. Contact info only visible if player is premium."""
+    """
+    Fetch a player's profile with tiered visibility.
+
+    - Guest: basic public info.
+    - Registered user: + age, gender, DOB, school.
+    - Owner: + contact info.
+    """
     player = Player.query.get(player_id)
     if not player:
         return error_response("Player not found", 404)
 
-    # Increment view count
-    player.profile_views = (player.profile_views or 0) + 1
-    db.session.commit()
+    # Increment view count (skip if owner is viewing)
+    viewer, is_authed = get_optional_viewer()
+    is_owner = bool(viewer and viewer.id == player.user_id)
+    if not is_owner:
+        player.profile_views = (player.profile_views or 0) + 1
+        db.session.commit()
 
-    # Determine if viewer can see contact info
-    # Contact visible if: player chose to show it AND player is premium
-    include_contact = player.show_contact and player.user.is_premium()
+    return success_response(data={
+        'player': player.to_dict(viewer=viewer, viewer_is_authenticated=is_authed)
+    })
 
-    return success_response(data={'player': player.to_dict(include_contact=include_contact)})
 
+# ─────────────────────────────────────────────────────────────
+#  Profile picture
+# ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/profile/picture', methods=['POST'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 @limiter.limit("10 per hour")
 def upload_profile_picture():
-    """Upload or replace player profile picture."""
     user = get_current_user()
     player = user.player_profile
-    if not player:
-        return error_response("Create a profile first", 404)
 
     if 'file' not in request.files:
         return error_response("No file provided", 400)
@@ -123,43 +147,51 @@ def upload_profile_picture():
 
     if not validate_file_extension(file.filename, ALLOWED_EXTENSIONS_IMAGE):
         return error_response(f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS_IMAGE)}", 400)
-
     if not validate_file_size(file.stream, MAX_IMAGE_SIZE):
         return error_response("File too large. Maximum 10MB for images.", 400)
 
     try:
-        # Delete old picture from Cloudinary if exists
         if player.profile_picture_public_id:
             CloudinaryService.delete_file(player.profile_picture_public_id)
-
         result = CloudinaryService.upload_image(file.stream, upload_type='profile_picture')
         player.profile_picture_url = result['secure_url']
         player.profile_picture_public_id = result['public_id']
         db.session.commit()
-
         return success_response(data={'profile_picture_url': result['secure_url']})
     except Exception as e:
         return error_response(f"Upload failed: {str(e)}", 500)
 
 
+# ─────────────────────────────────────────────────────────────
+#  Media (highlights) — premium gated for VIDEO
+# ─────────────────────────────────────────────────────────────
+
 @players_bp.route('/media', methods=['POST'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 @limiter.limit("20 per hour")
 def upload_media():
-    """Upload player media: image, video, or PDF CV."""
+    """
+    Upload player media: image, video, or PDF CV.
+    VIDEO uploads require premium subscription.
+    """
     user = get_current_user()
     player = user.player_profile
-    if not player:
-        return error_response("Create a profile first", 404)
 
     if 'file' not in request.files:
         return error_response("No file provided", 400)
 
     file = request.files['file']
-    media_type = request.form.get('media_type', '').upper()  # IMAGE, VIDEO, PDF
+    media_type = request.form.get('media_type', '').upper()
     title = request.form.get('title', '')
     description = request.form.get('description', '')
+
+    if media_type == 'VIDEO' and not user.is_premium():
+        return error_response(
+            "Uploading video highlights requires a premium subscription.",
+            403,
+            errors={'code': 'PREMIUM_REQUIRED', 'reason': 'upload_highlights'},
+        )
 
     if media_type == 'IMAGE':
         if not validate_file_extension(file.filename, ALLOWED_EXTENSIONS_IMAGE):
@@ -205,9 +237,8 @@ def upload_media():
 
 @players_bp.route('/media', methods=['GET'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 def get_my_media():
-    """Get all media uploaded by the current player."""
     user = get_current_user()
     media = MediaUpload.query.filter_by(user_id=user.id).order_by(MediaUpload.created_at.desc()).all()
     return success_response(data={'media': [m.to_dict() for m in media]})
@@ -215,14 +246,28 @@ def get_my_media():
 
 @players_bp.route('/<player_id>/media', methods=['GET'])
 def get_player_media(player_id):
-    """Get a player's approved media (public)."""
+    """
+    Public: returns media list, but non-approved/non-premium media is
+    hidden from guests. Guests get an empty list with a flag telling
+    the frontend to prompt login.
+    """
     player = Player.query.get(player_id)
     if not player:
         return error_response("Player not found", 404)
 
+    viewer, is_authed = get_optional_viewer()
+
+    # Guests don't get video highlights — only a login prompt.
+    if not is_authed:
+        return success_response(data={
+            'media': [],
+            'requires_login': True,
+            'message': 'Log in to view video highlights and additional media.',
+        })
+
     media = MediaUpload.query.filter_by(
         user_id=player.user_id,
-        is_approved=True
+        is_approved=True,
     ).order_by(MediaUpload.created_at.desc()).all()
 
     return success_response(data={'media': [m.to_dict() for m in media]})
@@ -230,9 +275,8 @@ def get_player_media(player_id):
 
 @players_bp.route('/media/<media_id>', methods=['DELETE'])
 @jwt_required()
-@role_required(Role.PLAYER)
+@capability_required('player')
 def delete_media(media_id):
-    """Delete a media upload."""
     user = get_current_user()
     media = MediaUpload.query.filter_by(id=media_id, user_id=user.id).first()
     if not media:
@@ -242,7 +286,7 @@ def delete_media(media_id):
         resource_type = 'video' if media.media_type == 'VIDEO' else ('raw' if media.media_type == 'PDF' else 'image')
         CloudinaryService.delete_file(media.public_id, resource_type=resource_type)
     except Exception:
-        pass  # Even if Cloudinary fails, remove from DB
+        pass
 
     db.session.delete(media)
     db.session.commit()

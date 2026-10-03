@@ -1,4 +1,4 @@
-// lib/api.js - API service for connecting to Railway backend
+// lib/api.js - API service for connecting to backend
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -151,6 +151,11 @@ class ApiService {
     return result.data.player;
   }
 
+  async getPlayerMedia(playerId) {
+    const result = await this.request(`/players/${playerId}/media`);
+    return result.data;
+  }
+
   async createPlayerProfile(data) {
     const result = await this.request("/players/profile", {
       method: "POST",
@@ -192,6 +197,14 @@ class ApiService {
     return result.data.scout;
   }
 
+  // ── Scout contact (premium only) ──
+  async contactScout(scoutId) {
+    const result = await this.request(`/scouts/${scoutId}/contact`, {
+      method: "POST",
+    });
+    return result.data;
+  }
+
   // ── Tournaments ──
   async getTournaments(params = {}) {
     const query = new URLSearchParams();
@@ -210,9 +223,87 @@ class ApiService {
     return result.data.tournament;
   }
 
+  // ── Organizers ──
+  async getMyOrganizerProfile() {
+    const result = await this.request("/organizers/me");
+    return result.data.organizer;
+  }
+
+  async createOrganizerProfile(data) {
+    const result = await this.request("/organizers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return result.data.organizer;
+  }
+
+  async updateOrganizerProfile(data) {
+    const result = await this.request("/organizers", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return result.data.organizer;
+  }
+
   // ── Subscriptions ──
+  async getSubscriptionPlans() {
+    const result = await this.request("/subscriptions/plans");
+    return result.data.plans;
+  }
+
   async getMySubscription() {
     const result = await this.request("/subscriptions/my");
+    return result.data;
+  }
+
+  async cancelSubscription() {
+    const result = await this.request("/subscriptions/cancel", {
+      method: "POST",
+    });
+    return result.data;
+  }
+
+  // ── Payments (Paystack) ──
+  async initializePaystackSubscription(plan) {
+    const result = await this.request("/payments/paystack/initialize", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    });
+    return result.data; // { payment_id, reference, authorization_url, access_code, amount, currency }
+  }
+
+  async verifyPaystackPayment(reference) {
+    const result = await this.request(
+      `/payments/paystack/verify/${reference}`
+    );
+    return result.data; // { payment, subscription }
+  }
+
+  async getPaymentHistory() {
+    const result = await this.request("/payments/history");
+    return result.data.payments;
+  }
+
+  // ── Tournament payment stubs (Option 3) ──
+  async initializeTeamEntryPayment(teamId, tournamentId) {
+    const result = await this.request(
+      "/payments/paystack/initialize/team-entry",
+      {
+        method: "POST",
+        body: JSON.stringify({ team_id: teamId, tournament_id: tournamentId }),
+      }
+    );
+    return result.data;
+  }
+
+  async initializeTournamentFinalPayment(tournamentId) {
+    const result = await this.request(
+      "/payments/paystack/initialize/tournament-final",
+      {
+        method: "POST",
+        body: JSON.stringify({ tournament_id: tournamentId }),
+      }
+    );
     return result.data;
   }
 
@@ -231,6 +322,12 @@ class ApiService {
 
     const result = await this.request(`/admin/users?${query.toString()}`);
     return result.data;
+  }
+
+  // ── Auth state helper (used by tiered UI) ──
+  isAuthenticated() {
+    if (typeof window === "undefined") return false;
+    return !!localStorage.getItem("access_token");
   }
 }
 
