@@ -44,6 +44,7 @@ def _register_blueprints(app):
     from .api.v1.admin.routes import admin_bp
     from .api.v1.search.routes import search_bp
     from .api.v1.organizers.routes import organizers_bp
+    from .api.v1.notifications.routes import notifications_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     app.register_blueprint(players_bp, url_prefix='/api/v1/players')
@@ -56,6 +57,7 @@ def _register_blueprints(app):
     app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     app.register_blueprint(search_bp, url_prefix='/api/v1/search')
     app.register_blueprint(organizers_bp, url_prefix='/api/v1/organizers')
+    app.register_blueprint(notifications_bp, url_prefix='/api/v1/notifications')
 
 
 def _register_error_handlers(app):

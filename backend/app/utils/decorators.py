@@ -7,8 +7,16 @@ from ..extensions import db
 
 
 # ─────────────────────────────────────────────────────────────
-#  Capability-based decorators (PREFERRED for new code)
+#  Capability-based decorators
 # ─────────────────────────────────────────────────────────────
+
+def _safe_check(fn, user):
+    """Return False if the check raises (e.g. missing table)."""
+    try:
+        return bool(fn(user))
+    except Exception:
+        return False
+
 
 _CAPABILITY_CHECKS = {
     'player':      lambda u: u.has_player_capability(),
@@ -19,15 +27,26 @@ _CAPABILITY_CHECKS = {
 }
 
 
+def _safe_capabilities(user):
+    """Return list of capabilities, skipping any that raise."""
+    caps = []
+    for name, check in _CAPABILITY_CHECKS.items():
+        if name == 'admin':
+            # admin check doesn't touch missing tables
+            try:
+                if check(user):
+                    caps.append('admin')
+            except Exception:
+                pass
+            continue
+        if _safe_check(check, user):
+            caps.append(name)
+    return caps
+
+
 def capability_required(*capabilities, mode='any'):
     """
     Require the current user to hold one (or all) capabilities.
-    A capability = existence of the relevant profile row.
-
-    Usage:
-        @capability_required('player')
-        @capability_required('organizer', 'admin', mode='any')
-        @capability_required('player', 'scout', mode='all')
     """
     if mode not in ('any', 'all'):
         raise ValueError("mode must be 'any' or 'all'")
@@ -45,7 +64,7 @@ def capability_required(*capabilities, mode='any'):
             if not checks:
                 return jsonify({'error': 'No valid capability specified'}), 500
 
-            passed = [c(user) for c in checks]
+            passed = [_safe_check(c, user) for c in checks]
             ok = all(passed) if mode == 'all' else any(passed)
 
             if not ok:
@@ -54,7 +73,7 @@ def capability_required(*capabilities, mode='any'):
                     'code': 'CAPABILITY_REQUIRED',
                     'required': list(capabilities),
                     'mode': mode,
-                    'yours': user.capabilities(),
+                    'yours': _safe_capabilities(user),
                 }), 403
 
             return f(*args, **kwargs)
@@ -67,7 +86,6 @@ def capability_required(*capabilities, mode='any'):
 # ─────────────────────────────────────────────────────────────
 
 def role_required(*roles):
-    """Restrict access to specific primary roles (legacy)."""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -93,7 +111,6 @@ def admin_required(f):
 
 
 def premium_required(f):
-    """Restrict to premium (paid subscription) users."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         verify_jwt_in_request()
@@ -144,7 +161,6 @@ def active_account_required(f):
 # ─────────────────────────────────────────────────────────────
 
 def get_current_user():
-    """Return the current authenticated User, or None."""
     user_id = get_jwt_identity()
     if not user_id:
         return None
@@ -152,12 +168,6 @@ def get_current_user():
 
 
 def get_optional_viewer():
-    """
-    Return (viewer, is_authenticated) for use in public routes that
-    change behavior when a user is logged in.
-
-    Does NOT raise if the request has no/invalid token.
-    """
     from flask_jwt_extended.exceptions import JWTExtendedException
     from jwt.exceptions import PyJWTError
     try:

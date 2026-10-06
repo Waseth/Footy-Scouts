@@ -324,6 +324,33 @@ class ApiService {
     return result.data;
   }
 
+    // ── Notifications ──
+  async getNotifications(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/notifications?${query.toString()}`);
+    return result.data;
+  }
+
+  async getUnreadNotificationCount() {
+    const result = await this.request("/notifications/unread-count");
+    return result.data.count;
+  }
+
+  async markNotificationRead(id) {
+    const result = await this.request(`/notifications/${id}/read`, { method: "POST" });
+    return result.data.notification;
+  }
+
+  async markAllNotificationsRead() {
+    return this.request("/notifications/read-all", { method: "POST" });
+  }
+
+  async deleteNotification(id) {
+    return this.request(`/notifications/${id}`, { method: "DELETE" });
+  }
+
   // ── Auth state helper (used by tiered UI) ──
   isAuthenticated() {
     if (typeof window === "undefined") return false;

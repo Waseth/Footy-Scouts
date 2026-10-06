@@ -4,9 +4,7 @@ from flask_jwt_extended import jwt_required
 from ....extensions import db, limiter
 from ....models import Player, MediaUpload
 from ....services.cloudinary_service import CloudinaryService
-from ....utils.decorators import (
-    capability_required, premium_required, get_current_user, get_optional_viewer,
-)
+from ....utils.decorators import get_current_user, get_optional_viewer
 from ....utils.helpers import success_response, error_response
 from ....utils.pagination import paginate_query
 from ....utils.validators import (
@@ -19,14 +17,42 @@ players_bp = Blueprint('players', __name__)
 
 
 # ─────────────────────────────────────────────────────────────
-#  Own profile (player capability required)
+#  Helpers
+# ─────────────────────────────────────────────────────────────
+
+def _ensure_player_profile(user):
+    """
+    Return the user's Player profile, creating a minimal one if missing.
+    Only call for users who can have a player profile (any authenticated
+    user — per the multi-capability model).
+    """
+    player = user.player_profile
+    if player:
+        return player
+
+    player = Player(
+        user_id=user.id,
+        full_name=(user.email.split('@')[0] if user.email else 'New Player'),
+    )
+    db.session.add(player)
+    db.session.flush()
+    return player
+
+
+# ─────────────────────────────────────────────────────────────
+#  Own profile
 # ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/profile', methods=['GET'])
 @jwt_required()
-@capability_required('player')
 def get_my_profile():
+    """
+    Get the current user's player profile.
+    Does not require a pre-existing profile — returns 404 if none.
+    """
     user = get_current_user()
+    if not user.player_profile:
+        return error_response("Player profile not found", 404)
     return success_response(data={
         'player': user.player_profile.to_dict(
             viewer=user, viewer_is_authenticated=True, include_contact=True,
@@ -39,17 +65,13 @@ def get_my_profile():
 def create_profile():
     """
     Create player profile.
-    NOTE: This does NOT require the PLAYER role — any authenticated user
-    can create a player profile (multi-capability model).
+    Any authenticated user can create one — no role gate.
     """
     user = get_current_user()
     if user.player_profile:
         return error_response("Player profile already exists. Use PUT to update.", 409)
 
-    data = request.get_json()
-    if not data:
-        return error_response("Request body required", 400)
-
+    data = request.get_json() or {}
     full_name = data.get('full_name', '').strip()
     if not full_name:
         return error_response("Full name is required", 400)
@@ -77,10 +99,13 @@ def create_profile():
 
 @players_bp.route('/profile', methods=['PUT'])
 @jwt_required()
-@capability_required('player')
 def update_profile():
+    """
+    Update player profile.
+    Auto-creates a minimal profile if the user has none yet.
+    """
     user = get_current_user()
-    player = user.player_profile
+    player = _ensure_player_profile(user)
 
     data = request.get_json() or {}
     updatable_fields = [
@@ -105,16 +130,14 @@ def update_profile():
 def get_player(player_id):
     """
     Fetch a player's profile with tiered visibility.
-
     - Guest: basic public info.
     - Registered user: + age, gender, DOB, school.
     - Owner: + contact info.
     """
-    player = Player.query.get(player_id)
+    player = db.session.get(Player, player_id)
     if not player:
         return error_response("Player not found", 404)
 
-    # Increment view count (skip if owner is viewing)
     viewer, is_authed = get_optional_viewer()
     is_owner = bool(viewer and viewer.id == player.user_id)
     if not is_owner:
@@ -132,11 +155,15 @@ def get_player(player_id):
 
 @players_bp.route('/profile/picture', methods=['POST'])
 @jwt_required()
-@capability_required('player')
 @limiter.limit("10 per hour")
 def upload_profile_picture():
+    """
+    Upload or replace player profile picture.
+    Auto-creates a minimal profile if missing so first-time users
+    can upload without completing onboarding first.
+    """
     user = get_current_user()
-    player = user.player_profile
+    player = _ensure_player_profile(user)
 
     if 'file' not in request.files:
         return error_response("No file provided", 400)
@@ -146,37 +173,44 @@ def upload_profile_picture():
         return error_response("No file selected", 400)
 
     if not validate_file_extension(file.filename, ALLOWED_EXTENSIONS_IMAGE):
-        return error_response(f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS_IMAGE)}", 400)
+        return error_response(
+            f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS_IMAGE)}",
+            400,
+        )
     if not validate_file_size(file.stream, MAX_IMAGE_SIZE):
         return error_response("File too large. Maximum 10MB for images.", 400)
 
     try:
         if player.profile_picture_public_id:
-            CloudinaryService.delete_file(player.profile_picture_public_id)
+            try:
+                CloudinaryService.delete_file(player.profile_picture_public_id)
+            except Exception:
+                pass  # don't fail if old delete fails
         result = CloudinaryService.upload_image(file.stream, upload_type='profile_picture')
         player.profile_picture_url = result['secure_url']
         player.profile_picture_public_id = result['public_id']
         db.session.commit()
         return success_response(data={'profile_picture_url': result['secure_url']})
     except Exception as e:
+        db.session.rollback()
         return error_response(f"Upload failed: {str(e)}", 500)
 
 
 # ─────────────────────────────────────────────────────────────
-#  Media (highlights) — premium gated for VIDEO
+#  Media (highlights) — VIDEO requires premium
 # ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/media', methods=['POST'])
 @jwt_required()
-@capability_required('player')
 @limiter.limit("20 per hour")
 def upload_media():
     """
     Upload player media: image, video, or PDF CV.
     VIDEO uploads require premium subscription.
+    Auto-creates a minimal profile if missing.
     """
     user = get_current_user()
-    player = user.player_profile
+    player = _ensure_player_profile(user)
 
     if 'file' not in request.files:
         return error_response("No file provided", 400)
@@ -237,27 +271,31 @@ def upload_media():
 
 @players_bp.route('/media', methods=['GET'])
 @jwt_required()
-@capability_required('player')
 def get_my_media():
+    """Get all media uploaded by the current user."""
     user = get_current_user()
-    media = MediaUpload.query.filter_by(user_id=user.id).order_by(MediaUpload.created_at.desc()).all()
+    media = (
+        MediaUpload.query
+        .filter_by(user_id=user.id)
+        .order_by(MediaUpload.created_at.desc())
+        .all()
+    )
     return success_response(data={'media': [m.to_dict() for m in media]})
 
 
 @players_bp.route('/<player_id>/media', methods=['GET'])
 def get_player_media(player_id):
     """
-    Public: returns media list, but non-approved/non-premium media is
-    hidden from guests. Guests get an empty list with a flag telling
-    the frontend to prompt login.
+    Public: returns media list for a player.
+    Guests get an empty list + requires_login flag so the frontend
+    can prompt them to log in.
     """
-    player = Player.query.get(player_id)
+    player = db.session.get(Player, player_id)
     if not player:
         return error_response("Player not found", 404)
 
     viewer, is_authed = get_optional_viewer()
 
-    # Guests don't get video highlights — only a login prompt.
     if not is_authed:
         return success_response(data={
             'media': [],
@@ -265,25 +303,30 @@ def get_player_media(player_id):
             'message': 'Log in to view video highlights and additional media.',
         })
 
-    media = MediaUpload.query.filter_by(
-        user_id=player.user_id,
-        is_approved=True,
-    ).order_by(MediaUpload.created_at.desc()).all()
+    media = (
+        MediaUpload.query
+        .filter_by(user_id=player.user_id, is_approved=True)
+        .order_by(MediaUpload.created_at.desc())
+        .all()
+    )
 
     return success_response(data={'media': [m.to_dict() for m in media]})
 
 
 @players_bp.route('/media/<media_id>', methods=['DELETE'])
 @jwt_required()
-@capability_required('player')
 def delete_media(media_id):
+    """Delete a media upload owned by the current user."""
     user = get_current_user()
     media = MediaUpload.query.filter_by(id=media_id, user_id=user.id).first()
     if not media:
         return error_response("Media not found", 404)
 
     try:
-        resource_type = 'video' if media.media_type == 'VIDEO' else ('raw' if media.media_type == 'PDF' else 'image')
+        resource_type = (
+            'video' if media.media_type == 'VIDEO'
+            else ('raw' if media.media_type == 'PDF' else 'image')
+        )
         CloudinaryService.delete_file(media.public_id, resource_type=resource_type)
     except Exception:
         pass

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, Star, Loader2 } from "lucide-react";
+import { Check, Star, Loader2, AlertCircle } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { api } from "@/lib/api";
@@ -34,7 +34,7 @@ const PLANS = {
   },
 };
 
-export default function SubscriptionPage() {
+function SubscriptionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselected = (searchParams.get("plan") || "MONTHLY").toUpperCase();
@@ -49,9 +49,7 @@ export default function SubscriptionPage() {
       try {
         const data = await api.getMySubscription();
         setSubscription(data.subscription);
-      } catch {
-        // no subscription yet — fine
-      }
+      } catch {}
     })();
   }, []);
 
@@ -60,7 +58,6 @@ export default function SubscriptionPage() {
     setLoading(true);
     try {
       const data = await api.initializePaystackSubscription(plan);
-      // Redirect to Paystack checkout
       window.location.href = data.authorization_url;
     } catch (err) {
       setError(err.message || "Could not start payment");
@@ -82,7 +79,8 @@ export default function SubscriptionPage() {
           {subscription?.plan && subscription.plan !== "FREE" && (
             <p className="mt-3 text-sm text-[#D4AF6A]">
               Current plan: {subscription.plan}
-              {subscription.end_date && ` · Renews ${new Date(subscription.end_date).toLocaleDateString()}`}
+              {subscription.end_date &&
+                ` · Renews ${new Date(subscription.end_date).toLocaleDateString()}`}
             </p>
           )}
         </div>
@@ -127,7 +125,10 @@ export default function SubscriptionPage() {
         </div>
 
         {error && (
-          <p className="mt-6 text-center text-sm text-red-400">{error}</p>
+          <div className="mt-6 flex items-start gap-2 mx-auto max-w-2xl rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            {error}
+          </div>
         )}
 
         <div className="mt-8 text-center">
@@ -138,13 +139,11 @@ export default function SubscriptionPage() {
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Starting checkout…
+                <Loader2 className="w-4 h-4 animate-spin" /> Starting checkout…
               </>
             ) : (
               <>
-                <Star className="w-4 h-4" />
-                Continue to Paystack
+                <Star className="w-4 h-4" /> Continue to Paystack
               </>
             )}
           </button>
@@ -158,5 +157,13 @@ export default function SubscriptionPage() {
       </div>
       <Footer />
     </div>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#1C1928]" />}>
+      <SubscriptionContent />
+    </Suspense>
   );
 }

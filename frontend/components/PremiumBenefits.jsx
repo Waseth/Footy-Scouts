@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Lock, Star, Video, MessageCircle, Trophy, Eye } from "lucide-react";
+import { Check, Star, Video, MessageCircle, Trophy, Eye } from "lucide-react";
 
 const BENEFITS = [
   {
@@ -57,7 +57,7 @@ export default function PremiumBenefits({ reason = "default" }) {
         )}
       </div>
 
-      <div className="grid gap-4 md:gap-5 md:grid-cols-2">
+      <div className="grid gap-4 md:gap-5 md:grid-cols-2 max-w-5xl mx-auto mb-10">
         {BENEFITS.map((b) => {
           const Icon = b.icon;
           const highlighted = b.key === reason;
@@ -71,7 +71,13 @@ export default function PremiumBenefits({ reason = "default" }) {
               }`}
             >
               <div className="flex items-start gap-4">
-                <div className={`rounded-lg p-2 ${highlighted ? "bg-[#D4AF6A] text-[#1C1928]" : "bg-[#D4AF6A]/15 text-[#D4AF6A]"}`}>
+                <div
+                  className={`rounded-lg p-2 ${
+                    highlighted
+                      ? "bg-[#D4AF6A] text-[#1C1928]"
+                      : "bg-[#D4AF6A]/15 text-[#D4AF6A]"
+                  }`}
+                >
                   <Icon className="w-5 h-5" />
                 </div>
                 <div>
@@ -84,9 +90,11 @@ export default function PremiumBenefits({ reason = "default" }) {
         })}
       </div>
 
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
+      {/* Plan cards */}
+      <div className="mt-10 grid gap-4 md:gap-6 md:grid-cols-2 max-w-4xl mx-auto">
         <PlanCard
-          plan="Monthly"
+          plan="MONTHLY"
+          planLabel="Monthly"
           price="KSh 1,000"
           period="/ month"
           features={[
@@ -95,11 +103,11 @@ export default function PremiumBenefits({ reason = "default" }) {
             "Full profile analytics",
             "Featured on search",
           ]}
-          ctaHref="/dashboard/subscription?plan=MONTHLY"
           ctaLabel="Go Monthly"
         />
         <PlanCard
-          plan="Annual"
+          plan="ANNUAL"
+          planLabel="Annual"
           price="KSh 10,000"
           period="/ year"
           badge="Save 17%"
@@ -109,30 +117,40 @@ export default function PremiumBenefits({ reason = "default" }) {
             "Extended highlight storage",
             "Early access to new features",
           ]}
-          ctaHref="/dashboard/subscription?plan=ANNUAL"
           ctaLabel="Go Annual"
           highlight
         />
       </div>
 
       <p className="mt-8 text-center text-xs text-white/40">
-        Payments via M-Pesa, Stripe, and PayPal. Cancel anytime.
+        Payments via Paystack. Cards, mobile money, and bank transfers accepted.
+        Cancel anytime.
       </p>
     </section>
   );
 }
 
-function PlanCard({ plan, price, period, badge, features, ctaHref, ctaLabel, highlight }) {
+function PlanCard({
+  plan,
+  planLabel,
+  price,
+  period,
+  badge,
+  features,
+  ctaLabel,
+  highlight,
+}) {
   return (
-    <div
-      className={`rounded-2xl border p-6 ${
+    <Link
+      href={`/dashboard/subscription?plan=${plan}`}
+      className={`group block rounded-2xl border p-6 transition-all duration-300 transform hover:-translate-y-1 ${
         highlight
-          ? "border-[#D4AF6A] bg-gradient-to-b from-[#D4AF6A]/10 to-transparent"
-          : "border-white/10 bg-[#242030]"
+          ? "border-[#D4AF6A] bg-gradient-to-b from-[#D4AF6A]/10 to-transparent hover:shadow-2xl hover:shadow-[#D4AF6A]/20"
+          : "border-white/10 bg-[#242030] hover:border-[#D4AF6A]/60 hover:shadow-xl hover:shadow-[#D4AF6A]/10"
       }`}
     >
       <div className="flex items-center justify-between">
-        <h3 className="text-white text-lg font-semibold">{plan}</h3>
+        <h3 className="text-white text-lg font-semibold">{planLabel}</h3>
         {badge && (
           <span className="text-xs px-2 py-1 rounded-full bg-[#D4AF6A] text-[#1C1928] font-semibold">
             {badge}
@@ -151,16 +169,15 @@ function PlanCard({ plan, price, period, badge, features, ctaHref, ctaLabel, hig
           </li>
         ))}
       </ul>
-      <Link
-        href={ctaHref}
+      <div
         className={`mt-6 block rounded-md px-5 py-3 text-center font-medium transition ${
           highlight
-            ? "bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90"
-            : "border border-[#D4AF6A]/40 text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928]"
+            ? "bg-[#D4AF6A] text-[#1C1928] group-hover:bg-[#c9a45f]"
+            : "border border-[#D4AF6A]/40 text-[#D4AF6A] group-hover:bg-[#D4AF6A] group-hover:text-[#1C1928]"
         }`}
       >
         {ctaLabel}
-      </Link>
-    </div>
+      </div>
+    </Link>
   );
 }
