@@ -16,7 +16,12 @@ class Scout(db.Model):
 
     country = db.Column(db.String(100))
     city = db.Column(db.String(100))
+
+    # Public contact (shown to owner + premium viewers only)
     contact_number = db.Column(db.String(30))
+    # For Call/WhatsApp buttons — required for verified scouts
+    phone_number = db.Column(db.String(30))
+
     biography = db.Column(db.Text)
 
     profile_picture_url = db.Column(db.String(500))
@@ -46,17 +51,23 @@ class Scout(db.Model):
 
     def to_dict(self, viewer=None, viewer_is_authenticated=False, public=True):
         """
-        Viewer-aware serialization.
+        Tiered serialization.
 
-        Public (guest) sees: name, type, agency, country, city, bio,
-                             picture, verified badge.
-        Registered users see the same + user_id + is_premium.
-        Owner sees + contact_number, email.
+        Guest:           name, type, agency, country, city, bio, picture, verified
+        Registered:      above + is_premium flag
+        Owner:           + contact_number, phone_number, email
+        Premium viewer:  + contact_number, phone_number (but NOT email)
         """
         is_owner = (
             viewer is not None
             and viewer_is_authenticated
             and getattr(self, 'user_id', None) == getattr(viewer, 'id', None)
+        )
+        is_premium_viewer = (
+            viewer is not None
+            and viewer_is_authenticated
+            and not is_owner
+            and getattr(viewer, 'is_premium', lambda: False)()
         )
 
         data = {
@@ -77,8 +88,12 @@ class Scout(db.Model):
             data['user_id'] = self.user_id
             data['is_premium'] = self.user.is_premium() if self.user else False
 
-        if is_owner or not public:
+        # Contact info: owner OR premium viewer only
+        if is_owner or is_premium_viewer or not public:
             data['contact_number'] = self.contact_number
+            data['phone_number'] = self.phone_number
+
+        if is_owner:
             data['email'] = self.user.email if self.user else None
 
         return data

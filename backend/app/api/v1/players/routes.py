@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 
@@ -20,12 +22,22 @@ players_bp = Blueprint('players', __name__)
 #  Helpers
 # ─────────────────────────────────────────────────────────────
 
+def _parse_date(raw):
+    """Convert 'YYYY-MM-DD' string (or None) to a datetime.date object."""
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        # handle both 'YYYY-MM-DD' and full ISO datetimes
+        raw = raw.split('T')[0]
+        try:
+            return datetime.strptime(raw, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return raw
+
+
 def _ensure_player_profile(user):
-    """
-    Return the user's Player profile, creating a minimal one if missing.
-    Only call for users who can have a player profile (any authenticated
-    user — per the multi-capability model).
-    """
+    """Return the user's Player profile, creating a minimal one if missing."""
     player = user.player_profile
     if player:
         return player
@@ -46,10 +58,6 @@ def _ensure_player_profile(user):
 @players_bp.route('/profile', methods=['GET'])
 @jwt_required()
 def get_my_profile():
-    """
-    Get the current user's player profile.
-    Does not require a pre-existing profile — returns 404 if none.
-    """
     user = get_current_user()
     if not user.player_profile:
         return error_response("Player profile not found", 404)
@@ -63,16 +71,12 @@ def get_my_profile():
 @players_bp.route('/profile', methods=['POST'])
 @jwt_required()
 def create_profile():
-    """
-    Create player profile.
-    Any authenticated user can create one — no role gate.
-    """
     user = get_current_user()
     if user.player_profile:
         return error_response("Player profile already exists. Use PUT to update.", 409)
 
     data = request.get_json() or {}
-    full_name = data.get('full_name', '').strip()
+    full_name = (data.get('full_name') or '').strip()
     if not full_name:
         return error_response("Full name is required", 400)
 
@@ -80,7 +84,7 @@ def create_profile():
         user_id=user.id,
         full_name=full_name,
         nationality=data.get('nationality'),
-        date_of_birth=data.get('date_of_birth'),
+        date_of_birth=_parse_date(data.get('date_of_birth')),
         gender=data.get('gender'),
         position=data.get('position'),
         current_team=data.get('current_team'),
@@ -100,21 +104,21 @@ def create_profile():
 @players_bp.route('/profile', methods=['PUT'])
 @jwt_required()
 def update_profile():
-    """
-    Update player profile.
-    Auto-creates a minimal profile if the user has none yet.
-    """
     user = get_current_user()
     player = _ensure_player_profile(user)
 
     data = request.get_json() or {}
     updatable_fields = [
-        'full_name', 'nationality', 'date_of_birth', 'gender', 'position',
+        'full_name', 'nationality', 'gender', 'position',
         'current_team', 'school', 'contact_number', 'show_contact', 'biography',
     ]
     for field in updatable_fields:
         if field in data:
             setattr(player, field, data[field])
+
+    # date_of_birth needs special handling (string → date)
+    if 'date_of_birth' in data:
+        player.date_of_birth = _parse_date(data['date_of_birth'])
 
     db.session.commit()
     return success_response(data={
@@ -123,17 +127,11 @@ def update_profile():
 
 
 # ─────────────────────────────────────────────────────────────
-#  Public / viewer-aware profile fetch
+#  Public / viewer-aware fetch
 # ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/<player_id>', methods=['GET'])
 def get_player(player_id):
-    """
-    Fetch a player's profile with tiered visibility.
-    - Guest: basic public info.
-    - Registered user: + age, gender, DOB, school.
-    - Owner: + contact info.
-    """
     player = db.session.get(Player, player_id)
     if not player:
         return error_response("Player not found", 404)
@@ -157,11 +155,6 @@ def get_player(player_id):
 @jwt_required()
 @limiter.limit("10 per hour")
 def upload_profile_picture():
-    """
-    Upload or replace player profile picture.
-    Auto-creates a minimal profile if missing so first-time users
-    can upload without completing onboarding first.
-    """
     user = get_current_user()
     player = _ensure_player_profile(user)
 
@@ -185,7 +178,7 @@ def upload_profile_picture():
             try:
                 CloudinaryService.delete_file(player.profile_picture_public_id)
             except Exception:
-                pass  # don't fail if old delete fails
+                pass
         result = CloudinaryService.upload_image(file.stream, upload_type='profile_picture')
         player.profile_picture_url = result['secure_url']
         player.profile_picture_public_id = result['public_id']
@@ -197,18 +190,13 @@ def upload_profile_picture():
 
 
 # ─────────────────────────────────────────────────────────────
-#  Media (highlights) — VIDEO requires premium
+#  Media
 # ─────────────────────────────────────────────────────────────
 
 @players_bp.route('/media', methods=['POST'])
 @jwt_required()
 @limiter.limit("20 per hour")
 def upload_media():
-    """
-    Upload player media: image, video, or PDF CV.
-    VIDEO uploads require premium subscription.
-    Auto-creates a minimal profile if missing.
-    """
     user = get_current_user()
     player = _ensure_player_profile(user)
 
@@ -272,7 +260,6 @@ def upload_media():
 @players_bp.route('/media', methods=['GET'])
 @jwt_required()
 def get_my_media():
-    """Get all media uploaded by the current user."""
     user = get_current_user()
     media = (
         MediaUpload.query
@@ -285,11 +272,6 @@ def get_my_media():
 
 @players_bp.route('/<player_id>/media', methods=['GET'])
 def get_player_media(player_id):
-    """
-    Public: returns media list for a player.
-    Guests get an empty list + requires_login flag so the frontend
-    can prompt them to log in.
-    """
     player = db.session.get(Player, player_id)
     if not player:
         return error_response("Player not found", 404)
@@ -316,7 +298,6 @@ def get_player_media(player_id):
 @players_bp.route('/media/<media_id>', methods=['DELETE'])
 @jwt_required()
 def delete_media(media_id):
-    """Delete a media upload owned by the current user."""
     user = get_current_user()
     media = MediaUpload.query.filter_by(id=media_id, user_id=user.id).first()
     if not media:

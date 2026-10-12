@@ -20,9 +20,7 @@ export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Where to send the user after login (default: /dashboard)
   const redirectTo = searchParams.get("redirect") || "/dashboard";
-  // Optional intent (e.g. "contact_scout", "upload_highlights") — passed back through
   const intent = searchParams.get("intent");
 
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +32,6 @@ export default function SignInForm() {
 
   const buildRedirectUrl = () => {
     if (!intent) return redirectTo;
-    // Preserve intent so the destination page can act on it
     const sep = redirectTo.includes("?") ? "&" : "?";
     return `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`;
   };
@@ -105,7 +102,6 @@ export default function SignInForm() {
     }
   };
 
-  // Build signup link preserving redirect+intent so signup → same destination
   const signupHref = (() => {
     const params = new URLSearchParams();
     if (redirectTo) params.set("redirect", redirectTo);
@@ -137,6 +133,11 @@ export default function SignInForm() {
               Log in to upload highlights. A premium account is required to upload video.
             </p>
           )}
+          {intent === "register_tournament" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in or create an account to register for tournaments.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -158,7 +159,9 @@ export default function SignInForm() {
               onChange={(e) => setEmail(e.target.value)}
               error={!!errors.email}
             />
-            {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+            )}
           </div>
 
           <div>
@@ -181,7 +184,9 @@ export default function SignInForm() {
                 {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
               </span>
             </div>
-            {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
+            {errors.password && (
+              <p className="mt-1 text-sm text-red-500">{errors.password}</p>
+            )}
           </div>
 
           <div className="flex items-center justify-between">

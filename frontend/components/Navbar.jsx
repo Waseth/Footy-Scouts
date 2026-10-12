@@ -53,7 +53,8 @@ export default function Navbar() {
     await api.logout();
     setIsLoggedIn(false);
     setUserRole(null);
-    router.push('/');
+    // Full reload so homepage re-detects auth state
+    window.location.href = '/';
   };
 
   const navLinks = [
@@ -174,7 +175,7 @@ export default function Navbar() {
                   className="hidden sm:inline-flex items-center gap-1 sm:gap-2 px-3 py-1.5 rounded-lg border font-medium text-xs sm:text-sm"
                 >
                   <LogIn className="w-3 h-3 sm:w-4 sm:h-4" />
-                  Login
+                  <span style={{ color: GOLD }}>Login</span>
                 </Link>
                 <Link
                   href="/signup"
@@ -184,7 +185,8 @@ export default function Navbar() {
                   }}
                   className="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm"
                 >
-                  Sign up
+                  <LogIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span style={{ color: DARK }}>Sign up</span>
                 </Link>
               </div>
             )}

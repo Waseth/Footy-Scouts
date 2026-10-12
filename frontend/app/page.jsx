@@ -37,7 +37,10 @@ export default function Home() {
   return isAuthed ? <LoggedInHome /> : <GuestHome />;
 }
 
-// ════ GUEST HOME ════
+// ════════════════════════════════════════════════════════════════
+//  GUEST HOME — 3 featured of each + login prompts
+// ════════════════════════════════════════════════════════════════
+
 function GuestHome() {
   const [featuredPlayers, setFeaturedPlayers] = useState([]);
   const [recentTournaments, setRecentTournaments] = useState([]);
@@ -48,7 +51,7 @@ function GuestHome() {
     const fetchData = async () => {
       try {
         const [playersRes, tournamentsRes, scoutsRes] = await Promise.all([
-          api.getPlayers({ page: 1, per_page: 4 }),
+          api.getPlayers({ page: 1, per_page: 3 }),
           api.getTournaments({ page: 1, per_page: 3 }),
           api.getScouts({ page: 1, per_page: 3 }),
         ]);
@@ -64,10 +67,16 @@ function GuestHome() {
     fetchData();
   }, []);
 
+  const goToLogin = (target) => {
+    const redirect = encodeURIComponent(target || "/");
+    window.location.href = `/login?redirect=${redirect}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />
 
+      {/* Hero */}
       <section className="container mx-auto px-4 py-12 sm:py-20 md:py-24 pt-20 sm:pt-24 md:pt-32">
         <div className="mx-auto max-w-4xl text-center px-4">
           <span className="text-[#D4AF6A] mb-3 md:mb-4 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">
@@ -96,18 +105,19 @@ function GuestHome() {
         </div>
       </section>
 
+      {/* Featured Players */}
       <GuestSection
         eyebrow="Discover Talent"
-        title="Find a player"
-        linkHref="/players"
-        linkLabel="View all players →"
+        title="Featured players"
         loading={loading}
         items={featuredPlayers}
         renderItem={(p) => <PlayerCard key={p.id} player={p} />}
         emptyMessage="No players found"
-        cols={4}
+        onSeeAll={() => goToLogin("/players")}
+        seeAllLabel="Log in to discover more players →"
       />
 
+      {/* Featured Tournaments */}
       <div className="bg-[#1C1928] py-12 md:py-16 border-t border-white/5">
         <div className="container mx-auto px-4">
           <div className="mx-auto max-w-6xl">
@@ -116,7 +126,7 @@ function GuestHome() {
                 Compete
               </span>
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white">
-                Upcoming tournaments
+                Featured tournaments
               </h2>
             </div>
             {loading ? (
@@ -133,27 +143,27 @@ function GuestHome() {
               </div>
             )}
             <div className="mt-6 md:mt-8 text-center">
-              <Link
-                href="/tournaments"
+              <button
+                onClick={() => goToLogin("/tournaments")}
                 className="inline-block rounded-md border border-[#D4AF6A]/30 px-6 py-2.5 text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928] transition text-sm md:text-base"
               >
-                See all tournaments →
-              </Link>
+                Log in to see all tournaments →
+              </button>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Featured Scouts */}
       <GuestSection
         eyebrow="Trusted Network"
-        title="See some of our scouts"
-        linkHref="/scouts"
-        linkLabel="View all scouts →"
+        title="Featured scouts"
         loading={loading}
         items={verifiedScouts}
         renderItem={(s) => <ScoutCard key={s.id} scout={s} />}
         emptyMessage="No scouts found"
-        cols={3}
+        onSeeAll={() => goToLogin("/scouts")}
+        seeAllLabel="Log in to discover more scouts →"
       />
 
       <FAQ />
@@ -163,13 +173,9 @@ function GuestHome() {
 }
 
 function GuestSection({
-  eyebrow, title, linkHref, linkLabel, loading, items, renderItem,
-  emptyMessage, cols = 4,
+  eyebrow, title, loading, items, renderItem,
+  emptyMessage, onSeeAll, seeAllLabel,
 }) {
-  const gridCols =
-    cols === 3
-      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
   return (
     <section className="container mx-auto px-4 py-12 md:py-16">
       <div className="mx-auto max-w-6xl">
@@ -177,31 +183,36 @@ function GuestSection({
           <span className="text-[#D4AF6A] mb-2 md:mb-3 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">
             {eyebrow}
           </span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white">{title}</h2>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white">
+            {title}
+          </h2>
         </div>
         {loading ? (
-          <GridSkeleton count={cols} cols={cols} />
+          <GridSkeleton count={3} cols={3} />
         ) : items.length > 0 ? (
-          <div className={`grid ${gridCols} gap-4 md:gap-5`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
             {items.map(renderItem)}
           </div>
         ) : (
           <p className="text-center text-white">{emptyMessage}</p>
         )}
         <div className="mt-6 md:mt-8 text-center">
-          <Link
-            href={linkHref}
+          <button
+            onClick={onSeeAll}
             className="inline-block rounded-md border border-[#D4AF6A]/30 px-6 py-2.5 text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928] transition text-sm md:text-base"
           >
-            {linkLabel}
-          </Link>
+            {seeAllLabel}
+          </button>
+          <p className="mt-3 text-xs text-white/40">
+            Create a free account to view full details.
+          </p>
         </div>
       </div>
     </section>
   );
 }
 
-function GridSkeleton({ count = 4, cols = 4 }) {
+function GridSkeleton({ count = 3, cols = 3 }) {
   const gridCols =
     cols === 3
       ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
@@ -227,7 +238,10 @@ function GridSkeleton({ count = 4, cols = 4 }) {
   );
 }
 
-// ════ LOGGED-IN HOME ════
+// ════════════════════════════════════════════════════════════════
+//  LOGGED-IN HOME — dashboard-style landing
+// ════════════════════════════════════════════════════════════════
+
 function LoggedInHome() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -354,7 +368,7 @@ function LoggedInHome() {
           </div>
         </div>
 
-        {/* Profile completeness — player/scout */}
+        {/* Profile completeness */}
         {(isPlayer || isScout) && (
           <div className="mb-8">
             <ProfileCompleteness
@@ -368,7 +382,7 @@ function LoggedInHome() {
         {/* Premium CTA */}
         {!isPremium && !isAdmin && <PremiumCTA variant="banner" />}
 
-        {/* Quick actions — no Dashboard card (navbar has it) */}
+        {/* Quick actions */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
           <QuickAction href="/dashboard/profile" icon={User} label="My profile" />
           {isPlayer && (

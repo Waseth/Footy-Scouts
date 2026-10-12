@@ -17,7 +17,6 @@ export default function PlayerDetailPage() {
   const router = useRouter();
   const [player, setPlayer] = useState(null);
   const [media, setMedia] = useState([]);
-  const [mediaMeta, setMediaMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -31,12 +30,9 @@ export default function PlayerDetailPage() {
       try {
         const p = await api.getPlayer(params.id);
         setPlayer(p);
-
-        // Try to fetch media (guests get requires_login flag back)
         try {
           const m = await api.getPlayerMedia(params.id);
           setMedia(m.media || []);
-          setMediaMeta(m);
         } catch {
           setMedia([]);
         }
@@ -54,6 +50,9 @@ export default function PlayerDetailPage() {
     router.push(`/login?redirect=${redirect}&intent=view_full_profile`);
   };
 
+  const backHref = isAuthed ? "/players" : "/";
+  const backLabel = isAuthed ? "Back to players" : "Back home";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1C1928]">
@@ -70,7 +69,6 @@ export default function PlayerDetailPage() {
                   <div className="h-10 bg-white/10 rounded w-3/4" />
                   <div className="h-6 bg-white/10 rounded w-1/2" />
                   <div className="h-4 bg-white/10 rounded w-full" />
-                  <div className="h-4 bg-white/10 rounded w-3/4" />
                 </div>
               </div>
             </div>
@@ -88,9 +86,7 @@ export default function PlayerDetailPage() {
         <div className="container mx-auto px-4 py-8 pt-24 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Player Not Found</h1>
           <p className="text-white/60 mb-6">{error || "The player you're looking for doesn't exist."}</p>
-          <Link href="/players" className="text-[#D4AF6A] hover:underline">
-            ← Back to Players
-          </Link>
+          <Link href="/" className="text-[#D4AF6A] hover:underline">← Back home</Link>
         </div>
         <Footer />
       </div>
@@ -107,31 +103,29 @@ export default function PlayerDetailPage() {
         <div className="flex items-center gap-2 text-sm text-white/40 mb-6">
           <Link href="/" className="hover:text-white/60 transition">Home</Link>
           <ChevronRight className="w-4 h-4" />
-          <Link href="/players" className="hover:text-white/60 transition">Players</Link>
-          <ChevronRight className="w-4 h-4" />
+          {isAuthed ? (
+            <>
+              <Link href="/players" className="hover:text-white/60 transition">Players</Link>
+              <ChevronRight className="w-4 h-4" />
+            </>
+          ) : null}
           <span className="text-white/80">{player.full_name}</span>
         </div>
 
         <Link
-          href="/players"
+          href={backHref}
           className="inline-flex items-center gap-2 text-white/60 hover:text-white transition mb-6"
         >
-          <ArrowLeft className="w-5 h-5" /> Back to Players
+          <ArrowLeft className="w-5 h-5" /> {backLabel}
         </Link>
 
         {/* Profile Card */}
         <div className="bg-[#242030] rounded-xl border border-white/10 overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            {/* Image */}
             <div className="w-full md:w-1/3 bg-[#1C1928] relative">
               <div className="aspect-square relative">
                 {player.profile_picture_url ? (
-                  <Image
-                    src={player.profile_picture_url}
-                    alt={player.full_name}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={player.profile_picture_url} alt={player.full_name} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-[#2A2438]">
                     <div className="text-center">
@@ -152,7 +146,6 @@ export default function PlayerDetailPage() {
               </div>
             </div>
 
-            {/* Details */}
             <div className="flex-1 p-6 md:p-8">
               <div className="flex items-start justify-between flex-wrap gap-4">
                 <div>
@@ -182,23 +175,12 @@ export default function PlayerDetailPage() {
                 </div>
               </div>
 
-              {/* Public fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                {player.nationality && (
-                  <InfoRow icon={Globe} label={player.nationality} />
-                )}
-                {player.current_team && (
-                  <InfoRow icon={Award} label={player.current_team} />
-                )}
-                {player.age != null && (
-                  <InfoRow icon={Calendar} label={`${player.age} years old`} />
-                )}
-                {player.gender && (
-                  <InfoRow icon={Shield} label={player.gender} />
-                )}
-                {player.school && (
-                  <InfoRow icon={MapPin} label={player.school} />
-                )}
+                {player.nationality && <InfoRow icon={Globe} label={player.nationality} />}
+                {player.current_team && <InfoRow icon={Award} label={player.current_team} />}
+                {player.age != null && <InfoRow icon={Calendar} label={`${player.age} years old`} />}
+                {player.gender && <InfoRow icon={Shield} label={player.gender} />}
+                {player.school && <InfoRow icon={MapPin} label={player.school} />}
               </div>
 
               {player.biography && (
@@ -208,7 +190,6 @@ export default function PlayerDetailPage() {
                 </div>
               )}
 
-              {/* Locked panel for guests */}
               {isGuestView ? (
                 <div className="mt-6 pt-6 border-t border-white/10">
                   <div className="flex items-start gap-3 rounded-lg bg-[#1C1928] border border-[#D4AF6A]/20 p-4">
@@ -231,35 +212,23 @@ export default function PlayerDetailPage() {
                 </div>
               ) : (
                 <>
-                  {/* Media section for logged-in users */}
                   <div className="mt-6 pt-6 border-t border-white/10">
-                    <h3 className="text-white font-semibold mb-3">
-                      Highlights &amp; Media
-                    </h3>
+                    <h3 className="text-white font-semibold mb-3">Highlights &amp; Media</h3>
                     {media.length === 0 ? (
-                      <p className="text-white/40 text-sm">
-                        No media available yet.
-                      </p>
+                      <p className="text-white/40 text-sm">No media available yet.</p>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {media.map((m) => (
-                          <MediaTile key={m.id} media={m} />
-                        ))}
+                        {media.map((m) => <MediaTile key={m.id} media={m} />)}
                       </div>
                     )}
                   </div>
 
-                  {/* Contact (only present for owner) */}
                   {(player.contact_number || player.email) && (
                     <div className="mt-6 pt-6 border-t border-white/10">
                       <h3 className="text-white font-semibold mb-3">Contact</h3>
                       <div className="flex flex-wrap gap-4">
-                        {player.contact_number && (
-                          <InfoRow icon={Phone} label={player.contact_number} />
-                        )}
-                        {player.email && (
-                          <InfoRow icon={Mail} label={player.email} />
-                        )}
+                        {player.contact_number && <InfoRow icon={Phone} label={player.contact_number} />}
+                        {player.email && <InfoRow icon={Mail} label={player.email} />}
                       </div>
                     </div>
                   )}
@@ -284,27 +253,12 @@ function InfoRow({ icon: Icon, label }) {
 }
 
 function MediaTile({ media }) {
-  const Icon =
-    media.media_type === "VIDEO"
-      ? Film
-      : media.media_type === "PDF"
-      ? FileText
-      : ImageIcon;
+  const Icon = media.media_type === "VIDEO" ? Film : media.media_type === "PDF" ? FileText : ImageIcon;
 
   if (media.media_type === "IMAGE" && media.url) {
     return (
-      <a
-        href={media.url}
-        target="_blank"
-        rel="noreferrer"
-        className="block aspect-square rounded-lg overflow-hidden border border-white/10"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={media.url}
-          alt={media.title || "media"}
-          className="w-full h-full object-cover"
-        />
+      <a href={media.url} target="_blank" rel="noreferrer" className="block aspect-square rounded-lg overflow-hidden border border-white/10">
+        <img src={media.url} alt={media.title || "media"} className="w-full h-full object-cover" />
       </a>
     );
   }

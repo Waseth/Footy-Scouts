@@ -2,16 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import PlayerCard from '@/components/PlayerCard';
 import CustomSelect from '@/components/CustomSelect';
 
+const GUEST_LIMIT = 3;
+
 export default function PlayersPage() {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
   const [nationality, setNationality] = useState('');
@@ -32,15 +35,20 @@ export default function PlayersPage() {
   ];
 
   useEffect(() => {
+    setIsAuthed(api.isAuthenticated());
+  }, []);
+
+  useEffect(() => {
     fetchPlayers();
   }, [page, position, nationality]);
 
   const fetchPlayers = async () => {
     setLoading(true);
     try {
+      const authed = api.isAuthenticated();
       const result = await api.getPlayers({
-        page,
-        per_page: 12,
+        page: authed ? page : 1,
+        per_page: authed ? 12 : GUEST_LIMIT,
         position: position || undefined,
         nationality: nationality || undefined,
       });
@@ -67,6 +75,8 @@ export default function PlayersPage() {
     setPage(1);
   };
 
+  const showFilters = isAuthed;
+
   return (
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />
@@ -75,60 +85,70 @@ export default function PlayersPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#D4AF6A]">Players</h1>
-          <p className="text-white mt-1">Discover talented football players from around the world</p>
+          <p className="text-white mt-1">
+            {isAuthed
+              ? 'Discover talented football players from around the world'
+              : 'Preview featured players. Log in to see more.'}
+          </p>
         </div>
 
-        {/* Search and Filters */}
-        <div className="bg-[#242030] rounded-lg p-6 border border-white/10 mb-8">
-          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 w-5 h-5" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, position, or nationality..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition"
-              />
-            </div>
-            <div className="flex gap-3 flex-wrap">
-              <CustomSelect
-                value={position}
-                onChange={setPosition}
-                options={positionOptions}
-                placeholder="All Positions"
-                className="min-w-[150px]"
-              />
-              <input
-                type="text"
-                value={nationality}
-                onChange={(e) => setNationality(e.target.value)}
-                placeholder="Nationality"
-                className="px-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition w-40"
-              />
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition cursor-pointer"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </form>
-        </div>
+        {/* Filters — only for logged-in users */}
+        {showFilters && (
+          <div className="bg-[#242030] rounded-lg p-6 border border-white/10 mb-8">
+            <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 w-5 h-5" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name, position, or nationality..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition"
+                />
+              </div>
+              <div className="flex gap-3 flex-wrap">
+                <CustomSelect
+                  value={position}
+                  onChange={setPosition}
+                  options={positionOptions}
+                  placeholder="All Positions"
+                  className="min-w-[150px]"
+                />
+                <input
+                  type="text"
+                  value={nationality}
+                  onChange={(e) => setNationality(e.target.value)}
+                  placeholder="Nationality"
+                  className="px-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition w-40"
+                />
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition cursor-pointer"
+                >
+                  Search
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
-        {/* Results Count */}
+        {/* Results count */}
         <div className="mb-4 text-white/60 text-sm">
-          {loading ? 'Loading...' : `Showing ${players.length} of ${total} players`}
+          {loading
+            ? 'Loading...'
+            : isAuthed
+            ? `Showing ${players.length} of ${total} players`
+            : `Showing ${players.length} featured players`}
         </div>
 
-        {/* Players Grid */}
+        {/* Grid */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
@@ -140,8 +160,6 @@ export default function PlayersPage() {
                     <div className="h-3 bg-white/10 rounded w-1/2" />
                   </div>
                 </div>
-                <div className="h-3 bg-white/10 rounded w-2/3 mb-2" />
-                <div className="h-3 bg-white/10 rounded w-1/3" />
               </div>
             ))}
           </div>
@@ -158,8 +176,38 @@ export default function PlayersPage() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
+        {/* Guest banner */}
+        {!isAuthed && !loading && players.length > 0 && (
+          <div className="mt-10 flex items-start gap-4 rounded-xl border border-[#D4AF6A]/30 bg-[#D4AF6A]/10 p-6">
+            <Lock className="w-6 h-6 text-[#D4AF6A] mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-white font-semibold text-lg">
+                Discover more players
+              </h3>
+              <p className="text-white/60 text-sm mt-1 mb-4">
+                Create a free account to browse all {total} players, filter by position,
+                and view full profiles with contact details.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/login?redirect=${encodeURIComponent('/players')}`}
+                  className="rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/10 transition"
+                >
+                  Create free account
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pagination — only for logged-in users */}
+        {isAuthed && totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 mt-8">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}

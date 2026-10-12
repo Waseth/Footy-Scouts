@@ -17,6 +17,23 @@ from ....utils.validators import (
 scouts_bp = Blueprint('scouts', __name__)
 
 
+def _normalize_phone(raw: str) -> str:
+    """Normalize Kenya phone to +254XXXXXXXXX. Returns '' if invalid."""
+    if not raw:
+        return ''
+    digits = ''.join(ch for ch in str(raw) if ch.isdigit())
+    if digits.startswith('254') and len(digits) == 12:
+        return '+' + digits
+    if digits.startswith('0') and len(digits) == 10:
+        return '+254' + digits[1:]
+    if len(digits) == 9:
+        return '+254' + digits
+    # If it looks like an international number already, prefix +
+    if 7 <= len(digits) <= 15 and not digits.startswith('254'):
+        return '+' + digits
+    return ''
+
+
 # ─────────────────────────────────────────────────────────────
 #  Own profile (scout capability)
 # ─────────────────────────────────────────────────────────────
@@ -38,7 +55,7 @@ def get_my_profile():
 def create_profile():
     """
     Create scout profile. Any authenticated user can create one.
-    No role gate — this is the multi-capability model.
+    Requires phone_number for Call/WhatsApp features.
     """
     user = get_current_user()
     if user.scout_profile:
@@ -53,6 +70,14 @@ def create_profile():
     if scout_type not in ['INDIVIDUAL', 'AGENCY']:
         return error_response("scout_type must be INDIVIDUAL or AGENCY", 400)
 
+    raw_phone = data.get('phone_number') or data.get('contact_number') or ''
+    phone = _normalize_phone(raw_phone)
+    if not phone:
+        return error_response(
+            "A valid phone number is required (e.g. 0712345678 or +254712345678)",
+            400,
+        )
+
     scout = Scout(
         user_id=user.id,
         scout_name=scout_name,
@@ -60,7 +85,8 @@ def create_profile():
         agency_name=data.get('agency_name'),
         country=data.get('country'),
         city=data.get('city'),
-        contact_number=data.get('contact_number'),
+        contact_number=phone,
+        phone_number=phone,
         biography=data.get('biography'),
     )
     db.session.add(scout)
@@ -80,7 +106,20 @@ def update_profile():
     scout = user.scout_profile
 
     data = request.get_json() or {}
-    updatable = ['scout_name', 'agency_name', 'country', 'city', 'contact_number', 'biography', 'scout_type']
+    updatable = ['scout_name', 'agency_name', 'country', 'city', 'biography', 'scout_type']
+
+    # Phone: normalize if provided
+    raw_phone = data.get('phone_number') or data.get('contact_number')
+    if raw_phone:
+        phone = _normalize_phone(raw_phone)
+        if not phone:
+            return error_response(
+                "A valid phone number is required (e.g. 0712345678 or +254712345678)",
+                400,
+            )
+        scout.phone_number = phone
+        scout.contact_number = phone
+
     for field in updatable:
         if field in data:
             setattr(scout, field, data[field])
@@ -121,21 +160,54 @@ def list_scouts():
         query = query.filter_by(scout_type=scout_type.upper())
 
     query = query.order_by(Scout.created_at.desc())
-    result = paginate_query(query, schema_fn=lambda s: s.to_dict(public=True))
+    viewer, is_authed = get_optional_viewer()
+    result = paginate_query(
+        query,
+        schema_fn=lambda s: s.to_dict(viewer=viewer, viewer_is_authenticated=is_authed, public=True),
+    )
     return success_response(data=result)
 
 
 # ─────────────────────────────────────────────────────────────
-#  Contact a scout (premium player action)
+#  Contact — returns phone for premium users
 # ─────────────────────────────────────────────────────────────
+
+@scouts_bp.route('/<scout_id>/contact-info', methods=['GET'])
+@jwt_required()
+def scout_contact_info(scout_id):
+    """
+    Return the scout's phone for Call/WhatsApp buttons.
+    Requires premium. Owner sees their own.
+    """
+    user = get_current_user()
+    scout = Scout.query.filter_by(id=scout_id, is_verified=True).first()
+    if not scout:
+        return error_response("Scout not found or not yet verified", 404)
+
+    is_owner = user.id == scout.user_id
+    if not is_owner and not user.is_premium():
+        return error_response(
+            "Premium subscription required to contact scouts",
+            403,
+            errors={'code': 'SUBSCRIPTION_REQUIRED', 'reason': 'contact_scout'},
+        )
+
+    if not scout.phone_number:
+        return error_response("This scout has not set a phone number yet", 404)
+
+    return success_response(data={
+        'phone_number': scout.phone_number,
+        'scout_name': scout.scout_name,
+    })
+
 
 @scouts_bp.route('/<scout_id>/contact', methods=['POST'])
 @jwt_required()
 @premium_required
 def contact_scout(scout_id):
     """
-    Premium players (and any premium user) can initiate contact with a scout.
-    Returns the scout's contact info for now; can later route via messages.
+    Legacy endpoint kept for backwards compatibility.
+    Prefer /contact-info for phone; this returns contact details in bulk.
     """
     scout = Scout.query.filter_by(id=scout_id, is_verified=True).first()
     if not scout:
@@ -145,12 +217,12 @@ def contact_scout(scout_id):
     if user.id == scout.user_id:
         return error_response("You cannot contact yourself", 400)
 
-    # Return contact info — alternative later: create a Message row instead.
     return success_response(data={
         'scout': {
             'id': scout.id,
             'scout_name': scout.scout_name,
             'contact_number': scout.contact_number,
+            'phone_number': scout.phone_number,
             'email': scout.user.email if scout.user else None,
         },
         'message': 'Contact details revealed. Please reference Footy Scout when reaching out.',

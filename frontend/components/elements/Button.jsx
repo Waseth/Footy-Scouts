@@ -14,11 +14,11 @@ export default function Button({
 
   const variantClasses = {
     primary:
-      "bg-white text-dark shadow-1 hover:bg-gray-2 hover:text-body-color",
+      "bg-[#D4AF6A] text-[#1C1928] font-semibold hover:bg-[#c9a45f]",
     outline:
-      "bg-white/12 text-white hover:bg-white hover:text-dark",
+      "bg-transparent border border-[#D4AF6A] text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928]",
     gold:
-      "bg-[#D4AF6A] text-[#1C1928] font-semibold hover:bg-[#c9a45f] shadow-1",
+      "bg-[#D4AF6A] text-[#1C1928] font-semibold hover:bg-[#c9a45f]",
   };
 
   return (

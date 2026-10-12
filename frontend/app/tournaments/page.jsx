@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Calendar, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, MapPin, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CustomSelect from '@/components/CustomSelect';
 
+const GUEST_LIMIT = 3;
+
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [tournamentType, setTournamentType] = useState('');
   const [location, setLocation] = useState('');
   const [page, setPage] = useState(1);
@@ -26,15 +29,20 @@ export default function TournamentsPage() {
   ];
 
   useEffect(() => {
+    setIsAuthed(api.isAuthenticated());
+  }, []);
+
+  useEffect(() => {
     fetchTournaments();
   }, [page, tournamentType, location]);
 
   const fetchTournaments = async () => {
     setLoading(true);
     try {
+      const authed = api.isAuthenticated();
       const result = await api.getTournaments({
-        page,
-        per_page: 9,
+        page: authed ? page : 1,
+        per_page: authed ? 9 : GUEST_LIMIT,
         type: tournamentType || undefined,
         location: location || undefined,
       });
@@ -69,73 +77,74 @@ export default function TournamentsPage() {
       <Navbar />
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 pt-20 sm:pt-24">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#D4AF6A]">Tournaments</h1>
-            <p className="text-white mt-1 text-sm sm:text-base">Find and register for upcoming tournaments</p>
+            <p className="text-white mt-1 text-sm sm:text-base">
+              {isAuthed
+                ? 'Find and register for upcoming tournaments'
+                : 'Preview featured tournaments. Log in to see more.'}
+            </p>
           </div>
-          <Link
-            href="/tournaments/create"
-            className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition text-center text-sm sm:text-base cursor-pointer whitespace-nowrap"
-          >
-            + Create Tournament
-          </Link>
+          {isAuthed && (
+            <Link
+              href="/tournaments/create"
+              className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition text-center text-sm sm:text-base cursor-pointer whitespace-nowrap"
+            >
+              + Create Tournament
+            </Link>
+          )}
         </div>
 
-        {/* Filters */}
-        <div className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 mb-6 sm:mb-8">
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
+        {isAuthed && (
+          <div className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 mb-6 sm:mb-8">
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <CustomSelect
                 value={tournamentType}
                 onChange={setTournamentType}
                 options={typeOptions}
                 placeholder="All Types"
-                className="flex-1 min-w-[120px] max-w-[160px] sm:max-w-[180px]"
+                className="flex-1 min-w-[120px] max-w-[180px]"
               />
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Location"
-                className="flex-1 min-w-[100px] max-w-[140px] sm:max-w-[160px] px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
+                className="flex-1 min-w-[100px] max-w-[160px] px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
               />
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer text-sm sm:text-base whitespace-nowrap"
+                className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer text-sm sm:text-base"
               >
-                Clear Filters
+                Clear
               </button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Results Count */}
         <div className="mb-3 sm:mb-4 text-white/60 text-sm sm:text-base">
-          {loading ? 'Loading...' : `Showing ${tournaments.length} of ${total} tournaments`}
+          {loading
+            ? 'Loading...'
+            : isAuthed
+            ? `Showing ${tournaments.length} of ${total} tournaments`
+            : `Showing ${tournaments.length} featured tournaments`}
         </div>
 
-        {/* Tournaments Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 animate-pulse">
-                <div className="h-4 sm:h-6 bg-white/10 rounded w-1/3 mb-2 sm:mb-3" />
-                <div className="h-4 sm:h-5 bg-white/10 rounded w-3/4 mb-1 sm:mb-2" />
-                <div className="h-3 sm:h-4 bg-white/10 rounded w-1/2 mb-3 sm:mb-4" />
-                <div className="flex gap-3 sm:gap-4">
-                  <div className="h-3 sm:h-4 bg-white/10 rounded w-1/3" />
-                  <div className="h-3 sm:h-4 bg-white/10 rounded w-1/3" />
-                </div>
+                <div className="h-4 bg-white/10 rounded w-1/3 mb-3" />
+                <div className="h-4 bg-white/10 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-white/10 rounded w-1/2" />
               </div>
             ))}
           </div>
         ) : tournaments.length === 0 ? (
           <div className="text-center py-8 sm:py-12">
             <p className="text-white text-base sm:text-lg">No tournaments available at the moment</p>
-            <p className="text-white/40 text-sm mt-1">Check back later for new tournaments</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -177,8 +186,33 @@ export default function TournamentsPage() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
+        {!isAuthed && !loading && tournaments.length > 0 && (
+          <div className="mt-10 flex items-start gap-4 rounded-xl border border-[#D4AF6A]/30 bg-[#D4AF6A]/10 p-6">
+            <Lock className="w-6 h-6 text-[#D4AF6A] mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-white font-semibold text-lg">See all tournaments</h3>
+              <p className="text-white/60 text-sm mt-1 mb-4">
+                Create a free account to browse all {total} tournaments and register your team.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/login?redirect=${encodeURIComponent('/tournaments')}`}
+                  className="rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/10 transition"
+                >
+                  Create free account
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isAuthed && totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 mt-6 sm:mt-8">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}

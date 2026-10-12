@@ -40,9 +40,8 @@ export default function ProfileEditPage() {
   const playerFileRef = useRef(null);
   const scoutFileRef = useRef(null);
 
-  // Crop modal state
   const [cropFile, setCropFile] = useState(null);
-  const [cropKind, setCropKind] = useState(null); // 'player' | 'scout'
+  const [cropKind, setCropKind] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -91,6 +90,7 @@ export default function ProfileEditPage() {
             country: s.country || "",
             city: s.city || "",
             contact_number: s.contact_number || "",
+            phone_number: s.phone_number || s.contact_number || "",
             biography: s.biography || "",
           });
         } catch {
@@ -101,6 +101,7 @@ export default function ProfileEditPage() {
             country: "",
             city: "",
             contact_number: "",
+            phone_number: "",
             biography: "",
           });
         }
@@ -164,7 +165,8 @@ export default function ProfileEditPage() {
         agency_name: scoutForm.scout_type === "AGENCY" ? scoutForm.agency_name : null,
         country: scoutForm.country,
         city: scoutForm.city,
-        contact_number: scoutForm.contact_number,
+        contact_number: scoutForm.phone_number || scoutForm.contact_number,
+        phone_number: scoutForm.phone_number || scoutForm.contact_number,
         biography: scoutForm.biography,
       };
       payloads.push(
@@ -186,14 +188,12 @@ export default function ProfileEditPage() {
     }
   };
 
-  // Called when a file is selected — opens the crop modal
   const handleFileSelected = (file, kind) => {
     if (!file) return;
     setCropFile(file);
     setCropKind(kind);
   };
 
-  // Called after the user confirms the crop
   const handleCropComplete = async (blob) => {
     const kind = cropKind;
     setCropFile(null);
@@ -269,7 +269,7 @@ export default function ProfileEditPage() {
           </div>
         )}
 
-        {/* Account info (read-only) */}
+        {/* Account */}
         <div className="rounded-2xl border border-white/10 bg-[#242030] p-6 mb-6">
           <h2 className="text-white font-semibold mb-4">Account</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -531,14 +531,21 @@ export default function ProfileEditPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <Label htmlFor="scout_contact">Contact number</Label>
+                <Label htmlFor="scout_phone">
+                  Phone number{" "}
+                  {!scoutForm.phone_number && <span className="text-red-500">*</span>}
+                </Label>
                 <Input
-                  id="scout_contact"
-                  value={scoutForm.contact_number || ""}
+                  id="scout_phone"
+                  value={scoutForm.phone_number || ""}
                   onChange={(e) =>
-                    setScoutForm((prev) => ({ ...prev, contact_number: e.target.value }))
+                    setScoutForm((prev) => ({ ...prev, phone_number: e.target.value }))
                   }
+                  placeholder="e.g. 0712345678 or +254712345678"
                 />
+                <p className="mt-1 text-xs text-white/40">
+                  Used for Call / WhatsApp contact. Only visible to premium users.
+                </p>
               </div>
 
               <div className="sm:col-span-2">
@@ -582,7 +589,6 @@ export default function ProfileEditPage() {
       </div>
       <Footer />
 
-      {/* Crop modal */}
       {cropFile && (
         <ImageCropModal
           file={cropFile}

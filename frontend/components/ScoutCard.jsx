@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import Image from 'next/image';
-import { ShieldCheck } from 'lucide-react';
+import Link from "next/link";
+import Image from "next/image";
+import { ShieldCheck } from "lucide-react";
 
 export default function ScoutCard({ scout }) {
   return (
@@ -15,31 +15,31 @@ export default function ScoutCard({ scout }) {
           {scout.profile_picture_url ? (
             <Image
               src={scout.profile_picture_url}
-              alt={scout.scout_name || 'Scout'}
+              alt={scout.scout_name || "Scout"}
               width={56}
               height={56}
               className="object-cover"
             />
           ) : (
-            scout.scout_name?.charAt(0) || 'S'
+            scout.scout_name?.charAt(0) || "S"
           )}
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-white group-hover:text-[#D4AF6A] transition truncate">
-              {scout.scout_name || 'Unknown Scout'}
+              {scout.scout_name || "Unknown Scout"}
             </h3>
             {scout.is_verified && (
               <ShieldCheck className="w-4 h-4 text-[#D4AF6A] flex-shrink-0" />
             )}
           </div>
           <p className="text-sm text-white/60 truncate">
-            {scout.scout_type === 'AGENCY' ? scout.agency_name : 'Independent Scout'}
+            {scout.scout_type === "AGENCY" ? scout.agency_name : "Independent Scout"}
           </p>
         </div>
       </div>
       <p className="text-sm text-white/40 truncate">
-        {scout.city || 'Unknown'}, {scout.country || 'Unknown'}
+        {scout.city || "Unknown"}, {scout.country || "Unknown"}
       </p>
     </Link>
   );
