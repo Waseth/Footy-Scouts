@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "lib/profileData.js", "components/profile/Accordion.jsx", "app/players/[id]/page.jsx", "app/scouts/[id]/page.jsx", "app/dashboard/page.jsx", "app/players/page.jsx", "app/scouts/page.jsx", "app/tournaments/[id]/page.jsx", "app/tournaments/register/page.jsx", "lib/api.js"  ],
+, "lib/profileData.js", "components/profile/Accordion.jsx", "app/players/[id]/page.jsx", "app/scouts/[id]/page.jsx", "app/dashboard/page.jsx", "app/players/page.jsx", "app/scouts/page.jsx", "app/tournaments/[id]/page.jsx", "app/tournaments/register/page.jsx", "lib/api.js", "app/merch/page.jsx", "app/blog/page.jsx"  ],
   "exclude": ["node_modules"]
 }

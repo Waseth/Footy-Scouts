@@ -12,6 +12,9 @@ from .admin_action import AdminAction
 from .organizer import OrganizerProfile
 # ... in __all__:
 'OrganizerProfile',
+from .waitlist import WaitlistSignup
+# in __all__:
+'WaitlistSignup',
 
 __all__ = [
     'User', 'Role',

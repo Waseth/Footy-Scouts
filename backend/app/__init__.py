@@ -5,6 +5,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 
 from .config import config
 from .extensions import init_extensions
+from .api.v1.waitlist.routes import waitlist_bp
 
 
 def create_app(config_name=None):
@@ -58,7 +59,7 @@ def _register_blueprints(app):
     app.register_blueprint(search_bp, url_prefix='/api/v1/search')
     app.register_blueprint(organizers_bp, url_prefix='/api/v1/organizers')
     app.register_blueprint(notifications_bp, url_prefix='/api/v1/notifications')
-
+    app.register_blueprint(waitlist_bp, url_prefix='/api/v1/waitlist')
 
 def _register_error_handlers(app):
     @app.errorhandler(400)
