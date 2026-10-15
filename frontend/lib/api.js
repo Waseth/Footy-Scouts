@@ -8,12 +8,12 @@ class ApiService {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
     this.token = null;
+    this.refreshPromise = null; // de-dupe concurrent refreshes
     if (typeof window !== "undefined") {
       this.token = localStorage.getItem("access_token");
     }
   }
 
-  // Read the freshest token — from memory, then localStorage.
   getToken() {
     if (this.token) return this.token;
     if (typeof window !== "undefined") {
@@ -38,7 +38,8 @@ class ApiService {
     }
   }
 
-  async request(endpoint, options = {}) {
+  // ── Core request with auto-refresh ──
+  async request(endpoint, options = {}, _retry = false) {
     const token = this.getToken();
 
     const headers = {
@@ -55,7 +56,7 @@ class ApiService {
       headers,
     });
 
-    // Some endpoints (204) return no body; guard against JSON parse crash.
+    // 204 / empty body safe parsing
     let data = null;
     const text = await response.text();
     if (text) {
@@ -66,19 +67,65 @@ class ApiService {
       }
     }
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        this.clearToken();
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
-        }
+    // ── Auto-refresh on 401 (only once per request) ──
+    if (response.status === 401 && !_retry && !endpoint.startsWith("/auth/")) {
+      const refreshed = await this._refreshAccessToken();
+      if (refreshed) {
+        // retry original request with the new token
+        return this.request(endpoint, options, true);
       }
+      // refresh failed → give up, log out
+      this.clearToken();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
+
+    if (!response.ok) {
       throw new Error(
         (data && (data.error || data.message)) || "Request failed"
       );
     }
 
     return data;
+  }
+
+  // ── Silent refresh helper (de-dupes concurrent calls) ──
+  async _refreshAccessToken() {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      try {
+        const refreshToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem("refresh_token")
+            : null;
+        if (!refreshToken) return false;
+
+        const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${refreshToken}`,
+          },
+        });
+
+        if (!res.ok) return false;
+
+        const data = await res.json();
+        const newToken = data?.data?.access_token;
+        if (!newToken) return false;
+
+        this.setToken(newToken);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   // ── Auth ──
@@ -119,18 +166,9 @@ class ApiService {
   }
 
   async refreshToken() {
-    const refreshToken =
-      typeof window !== "undefined"
-        ? localStorage.getItem("refresh_token")
-        : null;
-    if (!refreshToken) throw new Error("No refresh token");
-
-    const result = await this.request("/auth/refresh", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${refreshToken}` },
-    });
-    this.setToken(result.data.access_token);
-    return result.data.access_token;
+    const ok = await this._refreshAccessToken();
+    if (!ok) throw new Error("No refresh token");
+    return this.getToken();
   }
 
   // ── Players ──
@@ -154,6 +192,14 @@ class ApiService {
   async getPlayerMedia(playerId) {
     const result = await this.request(`/players/${playerId}/media`);
     return result.data;
+  }
+
+  async updateMediaDetails(mediaId, { title, description }) {
+    const result = await this.request(`/players/media/${mediaId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title, description }),
+    });
+    return result.data.media;
   }
 
   async createPlayerProfile(data) {
@@ -197,7 +243,6 @@ class ApiService {
     return result.data.scout;
   }
 
-  // ── Scout contact (premium only) ──
   async contactScout(scoutId) {
     const result = await this.request(`/scouts/${scoutId}/contact`, {
       method: "POST",
@@ -269,14 +314,14 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ plan }),
     });
-    return result.data; // { payment_id, reference, authorization_url, access_code, amount, currency }
+    return result.data;
   }
 
   async verifyPaystackPayment(reference) {
     const result = await this.request(
       `/payments/paystack/verify/${reference}`
     );
-    return result.data; // { payment, subscription }
+    return result.data;
   }
 
   async getPaymentHistory() {
@@ -284,7 +329,6 @@ class ApiService {
     return result.data.payments;
   }
 
-  // ── Tournament payment stubs (Option 3) ──
   async initializeTeamEntryPayment(teamId, tournamentId) {
     const result = await this.request(
       "/payments/paystack/initialize/team-entry",
@@ -307,6 +351,35 @@ class ApiService {
     return result.data;
   }
 
+  // ── Notifications ──
+  async getNotifications(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/notifications?${query.toString()}`);
+    return result.data;
+  }
+
+  async getUnreadNotificationCount() {
+    const result = await this.request("/notifications/unread-count");
+    return result.data.count;
+  }
+
+  async markNotificationRead(id) {
+    const result = await this.request(`/notifications/${id}/read`, {
+      method: "POST",
+    });
+    return result.data.notification;
+  }
+
+  async markAllNotificationsRead() {
+    return this.request("/notifications/read-all", { method: "POST" });
+  }
+
+  async deleteNotification(id) {
+    return this.request(`/notifications/${id}`, { method: "DELETE" });
+  }
+
   // ── Admin ──
   async getAdminDashboard() {
     const result = await this.request("/admin/dashboard");
@@ -324,42 +397,12 @@ class ApiService {
     return result.data;
   }
 
-    // ── Notifications ──
-  async getNotifications(params = {}) {
-    const query = new URLSearchParams();
-    if (params.page) query.append("page", String(params.page));
-    if (params.per_page) query.append("per_page", String(params.per_page));
-    const result = await this.request(`/notifications?${query.toString()}`);
-    return result.data;
-  }
-
-  async getUnreadNotificationCount() {
-    const result = await this.request("/notifications/unread-count");
-    return result.data.count;
-  }
-
-  async markNotificationRead(id) {
-    const result = await this.request(`/notifications/${id}/read`, { method: "POST" });
-    return result.data.notification;
-  }
-
-  async markAllNotificationsRead() {
-    return this.request("/notifications/read-all", { method: "POST" });
-  }
-
-  async deleteNotification(id) {
-    return this.request(`/notifications/${id}`, { method: "DELETE" });
-  }
-
-  // ── Auth state helper (used by tiered UI) ──
+  // ── Auth state helper ──
   isAuthenticated() {
     if (typeof window === "undefined") return false;
     return !!localStorage.getItem("access_token");
   }
 }
 
-// Export singleton
 export const api = new ApiService(API_BASE_URL);
-
-// For non-singleton usage
 export default ApiService;

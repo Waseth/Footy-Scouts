@@ -5,6 +5,9 @@ import { CheckCircle2, Circle } from "lucide-react";
 export default function ProfileCompleteness({ profile, role = "PLAYER", onActionHref }) {
   const { percent, missing } = computeCompleteness(profile, role);
 
+  // Auto-hide when fully complete
+  if (percent === 100) return null;
+
   const barColor =
     percent >= 80
       ? "bg-green-500"
@@ -26,7 +29,7 @@ export default function ProfileCompleteness({ profile, role = "PLAYER", onAction
         />
       </div>
 
-      {missing.length > 0 ? (
+      {missing.length > 0 && (
         <ul className="space-y-1.5 mb-4">
           {missing.slice(0, 4).map((m) => (
             <li key={m} className="flex items-center gap-2 text-sm text-white/60">
@@ -35,11 +38,6 @@ export default function ProfileCompleteness({ profile, role = "PLAYER", onAction
             </li>
           ))}
         </ul>
-      ) : (
-        <div className="flex items-center gap-2 text-sm text-green-400 mb-4">
-          <CheckCircle2 className="w-4 h-4" />
-          Your profile is complete!
-        </div>
       )}
 
       {onActionHref && (
@@ -60,33 +58,27 @@ function computeCompleteness(profile, role) {
   }
 
   const checks = [];
-  const missing = [];
 
   if (role === "PLAYER") {
-    checks.push(["full_name",     !!profile.full_name,            "Add your full name"]);
-    checks.push(["profile_pic",   !!profile.profile_picture_url,  "Upload a profile picture"]);
-    checks.push(["nationality",   !!profile.nationality,          "Add your nationality"]);
-    checks.push(["position",      !!profile.position,             "Add your position"]);
-    checks.push(["date_of_birth", !!profile.date_of_birth,        "Add your date of birth"]);
-    checks.push(["biography",     !!profile.biography,            "Write a short bio"]);
-    checks.push(["current_team",  !!profile.current_team,         "Add your current team"]);
+    checks.push(!!profile.full_name);
+    checks.push(!!profile.profile_picture_url);
+    checks.push(!!profile.nationality);
+    checks.push(!!profile.position);
+    checks.push(!!profile.date_of_birth);
+    checks.push(!!profile.biography);
+    checks.push(!!profile.current_team);
   } else if (role === "SCOUT") {
-    checks.push(["scout_name",    !!profile.scout_name,           "Add your scout name"]);
-    checks.push(["profile_pic",   !!profile.profile_picture_url,  "Upload a profile picture"]);
-    checks.push(["country",       !!profile.country,              "Add your country"]);
-    checks.push(["biography",     !!profile.biography,            "Write a short bio"]);
+    checks.push(!!profile.scout_name);
+    checks.push(!!profile.profile_picture_url);
+    checks.push(!!profile.country);
+    checks.push(!!profile.biography);
   } else if (role === "INSTITUTION") {
-    checks.push(["institution_name", !!profile.institution_name,  "Add your institution name"]);
-    checks.push(["country",          !!profile.country,           "Add your country"]);
-    checks.push(["biography",        !!profile.biography,         "Write a short bio"]);
+    checks.push(!!profile.institution_name);
+    checks.push(!!profile.country);
+    checks.push(!!profile.biography);
   }
 
-  for (const [, ok, msg] of checks) {
-    if (!ok) missing.push(msg);
-  }
-
-  const done = checks.length - missing.length;
+  const done = checks.filter(Boolean).length;
   const percent = checks.length ? Math.round((done / checks.length) * 100) : 100;
-
-  return { percent, missing };
+  return { percent, missing: [] };
 }

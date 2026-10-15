@@ -248,6 +248,7 @@ function LoggedInHome() {
   const [subscription, setSubscription] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [featuredPlayers, setFeaturedPlayers] = useState([]);
+  const [featuredScouts, setFeaturedScouts] = useState([]);
   const [upcomingTournaments, setUpcomingTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -280,11 +281,13 @@ function LoggedInHome() {
         }
 
         try {
-          const [playersRes, tournamentsRes] = await Promise.all([
+          const [playersRes, scoutsRes, tournamentsRes] = await Promise.all([
             api.getPlayers({ page: 1, per_page: 3 }),
-            api.getTournaments({ page: 1, per_page: 2 }),
+            api.getScouts({ page: 1, per_page: 3 }),
+            api.getTournaments({ page: 1, per_page: 3 }),
           ]);
           setFeaturedPlayers(playersRes.items || []);
+          setFeaturedScouts(scoutsRes.items || []);
           setUpcomingTournaments(tournamentsRes.items || []);
         } catch {}
       } catch (err) {
@@ -368,7 +371,7 @@ function LoggedInHome() {
           </div>
         </div>
 
-        {/* Profile completeness */}
+        {/* Profile completeness — auto-hides at 100% */}
         {(isPlayer || isScout) && (
           <div className="mb-8">
             <ProfileCompleteness
@@ -400,6 +403,24 @@ function LoggedInHome() {
           <QuickAction href="/dashboard" icon={ShieldCheck} label="Dashboard" />
         </div>
 
+        {/* Activity */}
+        {profile && (
+          <div className="rounded-2xl border border-white/10 bg-[#242030] p-6 mb-10">
+            <h2 className="text-lg font-semibold text-white mb-4">Your activity</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Stat label="Profile views" value={profile.profile_views || 0} icon={Eye} />
+              <Stat label="Role"          value={user?.role || "—"}           icon={User} />
+              <Stat label="Plan"          value={subscription?.plan || "FREE"} icon={Star} />
+              <Stat
+                label="Status"
+                value={user?.is_verified ? "Verified" : "Unverified"}
+                icon={CheckCircle2}
+                green={user?.is_verified}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Featured players */}
         {featuredPlayers.length > 0 && (
           <div className="mb-10">
@@ -417,16 +438,16 @@ function LoggedInHome() {
           </div>
         )}
 
-        {/* Upcoming tournaments */}
+        {/* Featured tournaments */}
         {upcomingTournaments.length > 0 && (
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-white">Upcoming tournaments</h2>
+              <h2 className="text-xl font-semibold text-white">Featured tournaments</h2>
               <Link href="/tournaments" className="text-sm text-[#D4AF6A] hover:underline">
                 See all →
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {upcomingTournaments.map((t) => (
                 <TournamentCard key={t.id} tournament={t} />
               ))}
@@ -434,20 +455,19 @@ function LoggedInHome() {
           </div>
         )}
 
-        {/* Activity */}
-        {profile && (
-          <div className="rounded-2xl border border-white/10 bg-[#242030] p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Your activity</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Stat label="Profile views" value={profile.profile_views || 0} icon={Eye} />
-              <Stat label="Role"          value={user?.role || "—"}           icon={User} />
-              <Stat label="Plan"          value={subscription?.plan || "FREE"} icon={Star} />
-              <Stat
-                label="Status"
-                value={user?.is_verified ? "Verified" : "Unverified"}
-                icon={CheckCircle2}
-                green={user?.is_verified}
-              />
+        {/* Featured scouts */}
+        {featuredScouts.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white">Featured scouts</h2>
+              <Link href="/scouts" className="text-sm text-[#D4AF6A] hover:underline">
+                See all →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {featuredScouts.map((s) => (
+                <ScoutCard key={s.id} scout={s} />
+              ))}
             </div>
           </div>
         )}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   User, Trophy, Users, Calendar, CreditCard, Settings,
-  LogOut, ShieldCheck, Star, Eye, Image as ImageIcon,
+  LogOut, Image as ImageIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -85,6 +85,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />
       <div className="container mx-auto px-4 py-8 pt-24 max-w-6xl">
+        {/* Welcome */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">
             Welcome back, {user?.email?.split("@")[0] || "User"}!
@@ -94,7 +95,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Profile completeness — always shown for player/scout, even with no profile */}
+        {/* Profile completeness — auto-hides at 100% via the component */}
         {(isPlayer || isScout) && (
           <div className="mb-8">
             <ProfileCompleteness
@@ -107,29 +108,6 @@ export default function DashboardPage() {
 
         {/* Premium nudge */}
         {!isPremium && !isAdmin && <PremiumCTA variant="banner" />}
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard label="Role"     value={user?.role || "—"}           icon={User} />
-          <StatCard
-            label="Plan"
-            value={subscription?.plan || "FREE"}
-            icon={Star}
-            highlight={isPremium}
-          />
-          <StatCard
-            label="Status"
-            value={user?.is_active ? "Active" : "Inactive"}
-            icon={ShieldCheck}
-            green={user?.is_active}
-          />
-          <StatCard
-            label="Verified"
-            value={user?.is_verified ? "Yes" : "No"}
-            icon={Eye}
-            green={user?.is_verified}
-          />
-        </div>
 
         {/* Quick actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -189,14 +167,15 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Admin stats */}
         {isAdmin && stats && (
           <div className="bg-[#242030] rounded-lg p-6 border border-white/10 mb-8">
             <h2 className="text-white font-semibold text-lg mb-4">Platform Overview</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <MiniStat label="Total Users"  value={stats.users?.total || 0} />
-              <MiniStat label="Players"      value={stats.users?.players || 0} />
-              <MiniStat label="Scouts"       value={stats.users?.scouts || 0} />
-              <MiniStat label="Tournaments"  value={stats.tournaments || 0} />
+              <MiniStat label="Total Users" value={stats.users?.total || 0} />
+              <MiniStat label="Players" value={stats.users?.players || 0} />
+              <MiniStat label="Scouts" value={stats.users?.scouts || 0} />
+              <MiniStat label="Tournaments" value={stats.tournaments || 0} />
             </div>
           </div>
         )}
@@ -222,25 +201,6 @@ export default function DashboardPage() {
         </button>
       </div>
       <Footer />
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon: Icon, green, highlight }) {
-  const iconColor = green
-    ? "text-green-500"
-    : highlight
-    ? "text-[#D4AF6A]"
-    : "text-[#D4AF6A]";
-  return (
-    <div className="bg-[#242030] rounded-lg p-6 border border-white/10">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-white/60 text-sm">{label}</p>
-          <p className="text-white font-semibold text-lg">{value}</p>
-        </div>
-        <Icon className={`w-8 h-8 ${iconColor}`} />
-      </div>
     </div>
   );
 }

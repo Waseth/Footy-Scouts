@@ -295,6 +295,25 @@ def get_player_media(player_id):
     return success_response(data={'media': [m.to_dict() for m in media]})
 
 
+@players_bp.route('/media/<media_id>', methods=['PATCH'])
+@jwt_required()
+def update_media_details(media_id):
+    """Update title/description of a media item owned by the current user."""
+    user = get_current_user()
+    media = MediaUpload.query.filter_by(id=media_id, user_id=user.id).first()
+    if not media:
+        return error_response("Media not found", 404)
+
+    data = request.get_json() or {}
+    if 'title' in data:
+        media.title = (data.get('title') or '').strip()[:255]
+    if 'description' in data:
+        media.description = (data.get('description') or '').strip()
+
+    db.session.commit()
+    return success_response(data={'media': media.to_dict()})
+
+
 @players_bp.route('/media/<media_id>', methods=['DELETE'])
 @jwt_required()
 def delete_media(media_id):
