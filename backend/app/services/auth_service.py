@@ -10,8 +10,25 @@ from ..models import User, Role, Subscription
 class AuthService:
 
     @staticmethod
+    def _build_tokens(user: User) -> dict:
+        """Generate access + refresh tokens for a user."""
+        additional_claims = {
+            'role': user.role_name,
+            'email': user.email,
+            'is_admin': user.is_admin(),
+        }
+        access_token = create_access_token(
+            identity=user.id, additional_claims=additional_claims
+        )
+        refresh_token = create_refresh_token(identity=user.id)
+        return {
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+        }
+
+    @staticmethod
     def register_user(email: str, password: str, role_name: str) -> dict:
-        """Register a new user and create default subscription."""
+        """Register a new user, create default subscription, and return tokens."""
         # Check email uniqueness
         if User.query.filter_by(email=email.lower()).first():
             return {'error': 'Email already registered'}, 409
@@ -24,10 +41,8 @@ class AuthService:
         # Create user
         user = User(email=email.lower(), role_id=role.id)
         user.set_password(password)
-        # ❌ REMOVE email verification token
-        # user.email_verification_token = secrets.token_urlsafe(32)
 
-        # Players are auto-approved; scouts and institutions need admin approval
+        # Players are auto-approved; scouts/institutions need admin approval
         if role_name == Role.PLAYER:
             user.is_approved = True
 
@@ -39,7 +54,15 @@ class AuthService:
         db.session.add(subscription)
 
         db.session.commit()
-        return {'user': user}, 201
+
+        # 🆕 Return tokens so the user is auto-logged-in
+        tokens = AuthService._build_tokens(user)
+
+        return {
+            'user': user,
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token'],
+        }, 201
 
     @staticmethod
     def login_user(email: str, password: str) -> dict:
@@ -60,17 +83,11 @@ class AuthService:
         db.session.commit()
 
         # Generate tokens
-        additional_claims = {
-            'role': user.role_name,
-            'email': user.email,
-            'is_admin': user.is_admin(),
-        }
-        access_token = create_access_token(identity=user.id, additional_claims=additional_claims)
-        refresh_token = create_refresh_token(identity=user.id)
+        tokens = AuthService._build_tokens(user)
 
         return {
-            'access_token': access_token,
-            'refresh_token': refresh_token,
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token'],
             'user': user.to_dict(),
             'is_admin': user.is_admin(),
         }, 200
@@ -93,7 +110,9 @@ class AuthService:
             'email': user.email,
             'is_admin': user.is_admin(),
         }
-        access_token = create_access_token(identity=user.id, additional_claims=additional_claims)
+        access_token = create_access_token(
+            identity=user.id, additional_claims=additional_claims
+        )
         return {'access_token': access_token}, 200
 
     @staticmethod
@@ -101,14 +120,7 @@ class AuthService:
         """Generate and store a password reset token."""
         user = User.query.filter_by(email=email.lower()).first()
         if not user:
-            # Don't reveal if email exists
             return {'message': 'If that email is registered, a reset link was sent.'}, 200
-
-        # ❌ REMOVE password reset token generation (no emails)
-        # token = secrets.token_urlsafe(32)
-        # user.reset_token = token
-        # user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
-        # db.session.commit()
 
         return {'message': 'If that email is registered, a reset link was sent.'}, 200
 
@@ -129,5 +141,3 @@ class AuthService:
         db.session.commit()
 
         return {'message': 'Password reset successfully'}, 200
-
-   

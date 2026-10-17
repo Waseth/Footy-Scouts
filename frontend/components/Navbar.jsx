@@ -17,21 +17,30 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Fetch fresh user state from backend — do NOT trust localStorage
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    const userStr = localStorage.getItem('user');
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setIsLoggedIn(true);
-        setUserRole(user.role);
-      } catch {}
-    } else {
+    if (!token) {
       setIsLoggedIn(false);
       setUserRole(null);
+      return;
     }
+
+    api
+      .getMe()
+      .then((me) => {
+        setIsLoggedIn(true);
+        setUserRole(me.role);
+        // Refresh localStorage.user so other pages stay fresh too
+        localStorage.setItem('user', JSON.stringify(me));
+      })
+      .catch(() => {
+        setIsLoggedIn(false);
+        setUserRole(null);
+      });
   }, [pathname]);
 
+  // Poll unread count when logged in
   useEffect(() => {
     if (!isLoggedIn) return;
     let mounted = true;
@@ -53,7 +62,6 @@ export default function Navbar() {
     await api.logout();
     setIsLoggedIn(false);
     setUserRole(null);
-    // Full reload so homepage re-detects auth state
     window.location.href = '/';
   };
 

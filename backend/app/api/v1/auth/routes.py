@@ -36,7 +36,9 @@ def register():
 
     valid_roles = [Role.PLAYER, Role.SCOUT, Role.INSTITUTION]
     if role_name not in valid_roles:
-        return error_response(f"Invalid role. Choose from: {', '.join(valid_roles)}", 400)
+        return error_response(
+            f"Invalid role. Choose from: {', '.join(valid_roles)}", 400
+        )
 
     result, status = AuthService.register_user(email, password, role_name)
 
@@ -47,7 +49,6 @@ def register():
 
     # ✅ Auto-verify the user (no email verification)
     user.is_verified = True
-    user.email_verification_token = None
     db.session.commit()
 
     approval_msg = ""
@@ -57,6 +58,8 @@ def register():
     return success_response(
         data={
             'user': user.to_dict(),
+            'access_token': result['access_token'],
+            'refresh_token': result['refresh_token'],
             'message': f'Registration successful.{approval_msg}',
         },
         status_code=201,
@@ -117,7 +120,6 @@ def forgot_password():
 
     result, status = AuthService.request_password_reset(email)
 
-    # ❌ No email sending - just return success
     return success_response(message=result['message'], status_code=200)
 
 
@@ -141,12 +143,6 @@ def reset_password():
         return error_response(result['error'], status)
 
     return success_response(message=result['message'], status_code=200)
-
-
-# ❌ REMOVE the verify-email endpoint entirely
-# @auth_bp.route('/verify-email', methods=['POST'])
-# def verify_email():
-#     ...
 
 
 @auth_bp.route('/me', methods=['GET'])

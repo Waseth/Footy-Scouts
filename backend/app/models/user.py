@@ -106,7 +106,9 @@ class User(db.Model):
         return self.subscription.is_active()
 
     def is_premium(self):
-        return self.has_active_subscription()
+        if not self.subscription:
+            return False
+        return self.subscription.is_premium()
 
     def __repr__(self):
         return f'<User {self.email}>'

@@ -24,15 +24,20 @@ export default function ScoutDetailPage() {
   const [contactInfo, setContactInfo] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
+  // Fetch fresh user state from backend — never trust localStorage
   useEffect(() => {
-    setIsAuthed(api.isAuthenticated());
-    const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
-    if (userStr) {
-      try {
-        const u = JSON.parse(userStr);
-        setIsPremium(u.is_premium || false);
-      } catch {}
-    }
+    const authed = api.isAuthenticated();
+    setIsAuthed(authed);
+
+    if (!authed) return;
+
+    api
+      .getMe()
+      .then((me) => setIsPremium(!!me.is_premium))
+      .catch(() => {
+        setIsAuthed(false);
+        setIsPremium(false);
+      });
   }, []);
 
   useEffect(() => {

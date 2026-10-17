@@ -49,7 +49,7 @@ function SubscriptionContent() {
       try {
         const data = await api.getMySubscription();
         setSubscription(data.subscription);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -93,11 +93,10 @@ function SubscriptionContent() {
                 key={key}
                 type="button"
                 onClick={() => setPlan(key)}
-                className={`text-left rounded-2xl border p-6 transition ${
-                  selected
+                className={`text-left rounded-2xl border p-6 transition ${selected
                     ? "border-[#D4AF6A] bg-[#D4AF6A]/10 shadow-lg shadow-[#D4AF6A]/10"
                     : "border-white/10 bg-[#242030] hover:border-[#D4AF6A]/40"
-                }`}
+                  }`}
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-white text-lg font-semibold">{p.name}</h3>
@@ -143,12 +142,14 @@ function SubscriptionContent() {
               </>
             ) : (
               <>
-                <Star className="w-4 h-4" /> Continue to Paystack
+                <Star className="w-4 h-4" /> Proceed to checkout
               </>
             )}
           </button>
           <p className="mt-3 text-xs text-white/40">
-            Secure payment via Paystack. Cards, mobile money, and bank transfers accepted.
+            
+              Secure checkout. Cards, mobile money, and bank transfers accepted.
+
           </p>
           <Link href="/dashboard" className="block mt-6 text-sm text-white/60 hover:text-white">
             ← Back to dashboard
