@@ -6,22 +6,25 @@ from .subscription import Subscription
 from .payment import Payment
 from .message import Message, Conversation
 from .tournament import Tournament, TournamentParticipant
+from .tournament_team import TournamentTeam
+from .team import Team, TeamMember, PlayerInvitation, PlayerJoinRequest
 from .media import MediaUpload
 from .notification import Notification
 from .admin_action import AdminAction
 from .organizer import OrganizerProfile
-# ... in __all__:
-'OrganizerProfile',
+from .organizer_payout import OrganizerPayout
 from .waitlist import WaitlistSignup
-# in __all__:
-'WaitlistSignup',
 
 __all__ = [
     'User', 'Role',
     'Player', 'Scout', 'Institution',
     'Subscription', 'Payment',
     'Message', 'Conversation',
-    'Tournament', 'TournamentParticipant',
+    'Tournament', 'TournamentParticipant', 'TournamentTeam',
+    'Team', 'TeamMember', 'PlayerInvitation', 'PlayerJoinRequest',
     'MediaUpload',
     'Notification', 'AdminAction',
+    'OrganizerProfile',
+    'OrganizerPayout',
+    'WaitlistSignup',
 ]

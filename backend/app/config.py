@@ -103,6 +103,11 @@ class Config:
     MONTHLY_PRICE_KES = float(os.environ.get('MONTHLY_PRICE_KES', 1000))
     ANNUAL_PRICE_KES = float(os.environ.get('ANNUAL_PRICE_KES', 10000))
 
+    PLATFORM_COMMISSION_PERCENT = float(
+        os.environ.get('PLATFORM_COMMISSION_PERCENT', 5.0)
+    )
+    PAYOUT_CODE_PREFIX = os.environ.get('PAYOUT_CODE_PREFIX', 'PAYOUT')
+
     # Rate Limiting
     RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL', 'memory://')
 
