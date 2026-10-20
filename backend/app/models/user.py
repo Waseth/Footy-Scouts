@@ -69,7 +69,7 @@ class User(db.Model):
     def check_password(self, password: str) -> bool:
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
-    # ── Role helpers (legacy — kept for admin/back-compat) ──
+    # ── Role helpers ──
     @property
     def role_name(self):
         return self.role.name if self.role else None
@@ -77,7 +77,7 @@ class User(db.Model):
     def is_admin(self):
         return self.role_name == Role.ADMIN
 
-    # ── Capability helpers (multi-capability aware) ──
+    # ── Capability helpers ──
     def has_player_capability(self):
         return getattr(self, 'player_profile', None) is not None
 
@@ -125,6 +125,11 @@ class User(db.Model):
             'is_premium': self.is_premium(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
+            # 🆕 Profile existence flags — frontend uses these to enforce onboarding
+            'has_player_profile': self.has_player_capability(),
+            'has_scout_profile': self.has_scout_capability(),
+            'has_institution_profile': self.has_institution_capability(),
+            'has_organizer_profile': self.has_organizer_capability(),
         }
         if include_capabilities:
             data['capabilities'] = self.capabilities()

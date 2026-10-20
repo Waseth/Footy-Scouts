@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, Search, ShoppingCart, LogIn, User, LogOut, Bell } from 'lucide-react';
+import { Menu, X, Search, ShoppingCart, LogIn, User, LogOut, Bell, Shield } from 'lucide-react';
 import { api } from '@/lib/api';
 
 const GOLD = '#D4AF6A';
@@ -31,7 +31,6 @@ export default function Navbar() {
       .then((me) => {
         setIsLoggedIn(true);
         setUserRole(me.role);
-        // Refresh localStorage.user so other pages stay fresh too
         localStorage.setItem('user', JSON.stringify(me));
       })
       .catch(() => {
@@ -40,7 +39,6 @@ export default function Navbar() {
       });
   }, [pathname]);
 
-  // Poll unread count when logged in
   useEffect(() => {
     if (!isLoggedIn) return;
     let mounted = true;
@@ -111,6 +109,21 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+
+            {/* Teams link — only when logged in */}
+            {isLoggedIn && (
+              <Link
+                href="/dashboard/teams"
+                style={{
+                  color: isActive('/dashboard/teams') ? GOLD : 'rgba(255,255,255,0.7)',
+                  fontWeight: isActive('/dashboard/teams') ? 500 : 400,
+                }}
+                className="text-sm transition inline-flex items-center gap-1"
+              >
+                {/* <Shield className="w-3.5 h-3.5" /> */}
+                Teams
+              </Link>
+            )}
           </div>
 
           {/* Right side */}
@@ -218,7 +231,7 @@ export default function Navbar() {
       <div
         style={{ backgroundColor: DARK }}
         className={`md:hidden border-b border-white/10 overflow-hidden transition-all duration-300 ease-in-out ${
-          isOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+          isOpen ? 'max-h-[700px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-1">
@@ -238,6 +251,57 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+
+          {isLoggedIn && (
+            <>
+              <Link
+                href="/dashboard/teams"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  color: isActive('/dashboard/teams') ? GOLD : 'rgba(255,255,255,0.7)',
+                  backgroundColor: isActive('/dashboard/teams')
+                    ? 'rgba(212, 175, 106, 0.1)'
+                    : 'transparent',
+                }}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition text-sm sm:text-base"
+              >
+                <Shield className="w-4 h-4" />
+                My Teams
+              </Link>
+              <Link
+                href="/dashboard/invitations"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  color: isActive('/dashboard/invitations')
+                    ? GOLD
+                    : 'rgba(255,255,255,0.7)',
+                  backgroundColor: isActive('/dashboard/invitations')
+                    ? 'rgba(212, 175, 106, 0.1)'
+                    : 'transparent',
+                }}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition text-sm sm:text-base"
+              >
+                <Bell className="w-4 h-4" />
+                Invitations
+              </Link>
+              <Link
+                href="/teams/available"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  color: isActive('/teams/available')
+                    ? GOLD
+                    : 'rgba(255,255,255,0.7)',
+                  backgroundColor: isActive('/teams/available')
+                    ? 'rgba(212, 175, 106, 0.1)'
+                    : 'transparent',
+                }}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition text-sm sm:text-base"
+              >
+                <User className="w-4 h-4" />
+                Find Teams
+              </Link>
+            </>
+          )}
 
           <div className="pt-3 sm:pt-4 border-t border-white/10 space-y-2">
             <Link

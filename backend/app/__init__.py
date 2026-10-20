@@ -5,7 +5,6 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 
 from .config import config
 from .extensions import init_extensions
-from .api.v1.waitlist.routes import waitlist_bp
 
 
 def create_app(config_name=None):
@@ -46,6 +45,9 @@ def _register_blueprints(app):
     from .api.v1.search.routes import search_bp
     from .api.v1.organizers.routes import organizers_bp
     from .api.v1.notifications.routes import notifications_bp
+    from .api.v1.waitlist.routes import waitlist_bp
+    from .api.v1.teams.routes import teams_bp
+    from .api.v1.invitations.routes import invitations_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     app.register_blueprint(players_bp, url_prefix='/api/v1/players')
@@ -60,6 +62,9 @@ def _register_blueprints(app):
     app.register_blueprint(organizers_bp, url_prefix='/api/v1/organizers')
     app.register_blueprint(notifications_bp, url_prefix='/api/v1/notifications')
     app.register_blueprint(waitlist_bp, url_prefix='/api/v1/waitlist')
+    app.register_blueprint(teams_bp, url_prefix='/api/v1/teams')
+    app.register_blueprint(invitations_bp, url_prefix='/api/v1/invitations')
+
 
 def _register_error_handlers(app):
     @app.errorhandler(400)

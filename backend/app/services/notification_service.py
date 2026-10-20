@@ -56,3 +56,75 @@ class NotificationService:
             body=reason or "Your account has been suspended. Contact support for assistance.",
             notification_type="ADMIN",
         )
+
+    # ── Team / Tournament system ──
+
+    @staticmethod
+    def notify_player_invited(player_user_id: str, team_name: str, captain_name: str,
+                              team_id: str):
+        return NotificationService.create(
+            user_id=player_user_id,
+            title="You've been invited to a team",
+            body=f"{captain_name} invited you to join {team_name}. Open the team to accept or decline.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )
+
+    @staticmethod
+    def notify_invite_accepted(captain_user_id: str, player_name: str,
+                               team_name: str, team_id: str):
+        return NotificationService.create(
+            user_id=captain_user_id,
+            title="Invitation accepted",
+            body=f"{player_name} accepted your invitation and joined {team_name}.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )
+
+    @staticmethod
+    def notify_invite_rejected(captain_user_id: str, player_name: str,
+                               team_name: str, team_id: str):
+        return NotificationService.create(
+            user_id=captain_user_id,
+            title="Invitation declined",
+            body=f"{player_name} declined your invitation to join {team_name}.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )
+
+    @staticmethod
+    def notify_join_request_received(captain_user_id: str, player_name: str,
+                                     team_name: str, team_id: str):
+        return NotificationService.create(
+            user_id=captain_user_id,
+            title="New join request",
+            body=f"{player_name} requested to join {team_name}.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )
+
+    @staticmethod
+    def notify_join_request_approved(player_user_id: str, team_name: str, team_id: str):
+        return NotificationService.create(
+            user_id=player_user_id,
+            title="Join request approved",
+            body=f"You're now part of {team_name}.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )
+
+    @staticmethod
+    def notify_join_request_rejected(player_user_id: str, team_name: str, team_id: str):
+        return NotificationService.create(
+            user_id=player_user_id,
+            title="Join request declined",
+            body=f"Your request to join {team_name} was declined.",
+            notification_type="TEAM",
+            related_id=team_id,
+            related_type="Team",
+        )

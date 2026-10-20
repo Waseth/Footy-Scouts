@@ -258,7 +258,7 @@ export default function SignUpForm() {
           </div>
 
           <Button type="submit" size="sm" variant="gold" disabled={loading}>
-            {loading ? "Signing up..." : "Sign Up"}
+            {loading ? "Setting up account..." : "Proceed to onboarding"}
           </Button>
         </form>
 

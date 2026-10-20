@@ -44,6 +44,37 @@ class Team(db.Model):
     def active_members(self):
         return self.members.filter_by(status=TeamMember.STATUS_ACTIVE).all()
 
+    def active_tournament_info(self):
+        """
+        If the team is in any active tournament (ACCEPTED / REGISTERED),
+        return info about the most recent one — for slot display.
+        """
+        from .tournament_team import TournamentTeam
+        active_statuses = [
+            TournamentTeam.STATUS_ACCEPTED,
+            TournamentTeam.STATUS_REGISTERED,
+        ]
+        # Query the model directly — self.tournament_entries is a plain list
+        entry = (
+            TournamentTeam.query
+            .filter(
+                TournamentTeam.team_id == self.id,
+                TournamentTeam.status.in_(active_statuses),
+            )
+            .order_by(TournamentTeam.created_at.desc())
+            .first()
+        )
+        if not entry or not entry.tournament:
+            return None
+        t = entry.tournament
+        return {
+            'tournament_id': t.id,
+            'tournament_name': t.tournament_name,
+            'max_players_per_team': t.max_players_per_team,
+            'min_players_per_team': t.min_players_per_team,
+            'required_teams': t.required_teams,
+        }
+
     def to_dict(self, public=True, viewer=None):
         data = {
             'id': self.id,
@@ -52,6 +83,7 @@ class Team(db.Model):
             'logo_url': self.logo_url,
             'member_count': self.active_members_count(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'active_tournament': self.active_tournament_info(),
         }
         if not public:
             data['captain_user_id'] = self.captain_user_id
@@ -106,9 +138,7 @@ class TeamMember(db.Model):
 
 
 class PlayerInvitation(db.Model):
-    """
-    Captain invites a player to join their team.
-    """
+    """Captain invites a player to join their team."""
     __tablename__ = 'player_invitations'
 
     STATUS_PENDING = 'PENDING'
@@ -155,9 +185,7 @@ class PlayerInvitation(db.Model):
 
 
 class PlayerJoinRequest(db.Model):
-    """
-    A player requests to join a team. Captain approves or rejects.
-    """
+    """A player requests to join a team. Captain approves or rejects."""
     __tablename__ = 'player_join_requests'
 
     STATUS_PENDING = 'PENDING'

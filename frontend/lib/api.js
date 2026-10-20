@@ -4,11 +4,19 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://footy-scouts-production.up.railway.app/api/v1";
 
+// Endpoints that must NEVER auto-refresh (avoids loops)
+const AUTH_NO_REFRESH = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/logout",
+];
+
 class ApiService {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
     this.token = null;
-    this.refreshPromise = null; // de-dupe concurrent refreshes
+    this.refreshPromise = null;
     if (typeof window !== "undefined") {
       this.token = localStorage.getItem("access_token");
     }
@@ -38,7 +46,6 @@ class ApiService {
     }
   }
 
-  // ── Core request with auto-refresh ──
   async request(endpoint, options = {}, _retry = false) {
     const token = this.getToken();
 
@@ -56,7 +63,6 @@ class ApiService {
       headers,
     });
 
-    // 204 / empty body safe parsing
     let data = null;
     const text = await response.text();
     if (text) {
@@ -67,18 +73,17 @@ class ApiService {
       }
     }
 
-    // ── Auto-refresh on 401 (only once per request) ──
-    if (response.status === 401 && !_retry && !endpoint.startsWith("/auth/")) {
+    const isAuthNoRefresh = AUTH_NO_REFRESH.some((p) => endpoint.startsWith(p));
+
+    if (response.status === 401 && !_retry && !isAuthNoRefresh) {
       const refreshed = await this._refreshAccessToken();
       if (refreshed) {
-        // retry original request with the new token
         return this.request(endpoint, options, true);
       }
-      // refresh failed → give up, log out
       this.clearToken();
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
+      throw new Error(
+        (data && (data.error || data.message)) || "Session expired"
+      );
     }
 
     if (!response.ok) {
@@ -90,7 +95,6 @@ class ApiService {
     return data;
   }
 
-  // ── Silent refresh helper (de-dupes concurrent calls) ──
   async _refreshAccessToken() {
     if (this.refreshPromise) return this.refreshPromise;
 
@@ -130,10 +134,18 @@ class ApiService {
 
   // ── Auth ──
   async register(email, password, role) {
-    return this.request("/auth/register", {
+    const result = await this.request("/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password, role }),
     });
+    if (result.data?.access_token) {
+      this.setToken(result.data.access_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("refresh_token", result.data.refresh_token);
+        localStorage.setItem("user", JSON.stringify(result.data.user));
+      }
+    }
+    return result;
   }
 
   async login(email, password) {
@@ -171,6 +183,16 @@ class ApiService {
     return this.getToken();
   }
 
+  // 🆕 Delete account
+  async deleteAccount(password) {
+    const result = await this.request("/auth/account", {
+      method: "DELETE",
+      body: JSON.stringify({ password }),
+    });
+    this.clearToken();
+    return result;
+  }
+
   // ── Players ──
   async getPlayers(params = {}) {
     const query = new URLSearchParams();
@@ -179,7 +201,6 @@ class ApiService {
     if (params.nationality) query.append("country", params.nationality);
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
-
     const result = await this.request(`/search/players?${query.toString()}`);
     return result.data;
   }
@@ -225,7 +246,6 @@ class ApiService {
     if (params.scout_type) query.append("scout_type", params.scout_type);
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
-
     const result = await this.request(`/search/scouts?${query.toString()}`);
     return result.data;
   }
@@ -258,7 +278,6 @@ class ApiService {
     if (params.location) query.append("location", params.location);
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
-
     const result = await this.request(`/tournaments?${query.toString()}`);
     return result.data;
   }
@@ -308,7 +327,7 @@ class ApiService {
     return result.data;
   }
 
-  // ── Payments (Paystack) ──
+  // ── Payments ──
   async initializePaystackSubscription(plan) {
     const result = await this.request("/payments/paystack/initialize", {
       method: "POST",
@@ -318,9 +337,7 @@ class ApiService {
   }
 
   async verifyPaystackPayment(reference) {
-    const result = await this.request(
-      `/payments/paystack/verify/${reference}`
-    );
+    const result = await this.request(`/payments/paystack/verify/${reference}`);
     return result.data;
   }
 
@@ -380,6 +397,165 @@ class ApiService {
     return this.request(`/notifications/${id}`, { method: "DELETE" });
   }
 
+  // ── Teams ──
+  async createTeam(data) {
+    const result = await this.request("/teams", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return result.data.team;
+  }
+
+  async getMyTeams(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/teams/my?${query.toString()}`);
+    return result.data;
+  }
+
+  async getAvailableTeams(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/teams/available?${query.toString()}`);
+    return result.data;
+  }
+
+  async getTeam(id) {
+    const result = await this.request(`/teams/${id}`);
+    return result.data;
+  }
+
+  async updateTeam(id, data) {
+    const result = await this.request(`/teams/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return result.data.team;
+  }
+
+  async deleteTeam(id) {
+    return this.request(`/teams/${id}`, { method: "DELETE" });
+  }
+
+  async uploadTeamLogo(id, file) {
+    const token = this.getToken();
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${this.baseUrl}/teams/${id}/logo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    return data.data.logo_url;
+  }
+
+  async getTeamMembers(id) {
+    const result = await this.request(`/teams/${id}/members`);
+    return result.data;
+  }
+
+  async removeTeamMember(teamId, memberId) {
+    return this.request(`/teams/${teamId}/members/${memberId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async leaveTeam(teamId) {
+    return this.request(`/teams/${teamId}/leave`, { method: "POST" });
+  }
+
+  async invitePlayer(teamId, userId, message = "") {
+    const result = await this.request(`/teams/${teamId}/invite-player`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, message }),
+    });
+    return result.data.invitation;
+  }
+
+  async cancelInvitation(teamId, inviteId) {
+    return this.request(`/teams/${teamId}/invitations/${inviteId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getJoinRequests(teamId) {
+    const result = await this.request(`/teams/${teamId}/join-requests`);
+    return result.data.requests;
+  }
+
+  async acceptJoinRequest(teamId, requestId) {
+    return this.request(
+      `/teams/${teamId}/join-requests/${requestId}/accept`,
+      { method: "POST" }
+    );
+  }
+
+  async rejectJoinRequest(teamId, requestId) {
+    return this.request(
+      `/teams/${teamId}/join-requests/${requestId}/reject`,
+      { method: "POST" }
+    );
+  }
+
+  async requestToJoinTeam(teamId, message = "") {
+    const result = await this.request(`/teams/${teamId}/request-join`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+    return result.data.request;
+  }
+
+  async searchPlayersForInvite(teamId, q = "") {
+    const query = new URLSearchParams();
+    if (teamId) query.append("team_id", teamId);
+    if (q) query.append("q", q);
+    const result = await this.request(
+      `/teams/search-players?${query.toString()}`
+    );
+    return result.data.players;
+  }
+
+  // ── Invitations ──
+  async getMyPlayerInvitations(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/invitations/player?${query.toString()}`);
+    return result.data;
+  }
+
+  async acceptPlayerInvite(inviteId) {
+    return this.request(`/invitations/player/${inviteId}/accept`, {
+      method: "POST",
+    });
+  }
+
+  async rejectPlayerInvite(inviteId) {
+    return this.request(`/invitations/player/${inviteId}/reject`, {
+      method: "POST",
+    });
+  }
+
+  async getMyJoinRequests(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(
+      `/invitations/my-join-requests?${query.toString()}`
+    );
+    return result.data;
+  }
+
+  async cancelJoinRequest(requestId) {
+    return this.request(`/invitations/my-join-requests/${requestId}`, {
+      method: "DELETE",
+    });
+  }
+
   // ── Admin ──
   async getAdminDashboard() {
     const result = await this.request("/admin/dashboard");
@@ -392,12 +568,10 @@ class ApiService {
     if (params.status) query.append("status", params.status);
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
-
     const result = await this.request(`/admin/users?${query.toString()}`);
     return result.data;
   }
 
-  // ── Auth state helper ──
   isAuthenticated() {
     if (typeof window === "undefined") return false;
     return !!localStorage.getItem("access_token");
