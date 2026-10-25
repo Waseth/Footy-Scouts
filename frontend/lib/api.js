@@ -166,9 +166,7 @@ class ApiService {
   async logout() {
     try {
       await this.request("/auth/logout", { method: "POST" });
-    } catch (e) {
-      // Ignore errors on logout
-    }
+    } catch (e) {}
     this.clearToken();
   }
 
@@ -183,7 +181,6 @@ class ApiService {
     return this.getToken();
   }
 
-  // 🆕 Delete account
   async deleteAccount(password) {
     const result = await this.request("/auth/account", {
       method: "DELETE",
@@ -270,7 +267,7 @@ class ApiService {
     return result.data;
   }
 
-  // ── Tournaments ──
+  // ── Tournaments (public) ──
   async getTournaments(params = {}) {
     const query = new URLSearchParams();
     if (params.type) query.append("type", params.type);
@@ -284,7 +281,118 @@ class ApiService {
 
   async getTournament(id) {
     const result = await this.request(`/tournaments/${id}`);
+    return result.data;
+  }
+
+  // ── Tournament organizer ──
+  async createTournament(data) {
+    const result = await this.request("/tournaments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
     return result.data.tournament;
+  }
+
+  async updateTournament(id, data) {
+    const result = await this.request(`/tournaments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return result.data.tournament;
+  }
+
+  async publishTournament(id) {
+    const result = await this.request(`/tournaments/${id}/publish`, {
+      method: "POST",
+    });
+    return result.data.tournament;
+  }
+
+  async cancelTournament(id) {
+    const result = await this.request(`/tournaments/${id}/cancel`, {
+      method: "POST",
+    });
+    return result.data.tournament;
+  }
+
+  async getMyTournaments(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/tournaments/my?${query.toString()}`);
+    return result.data;
+  }
+
+  async inviteTeamToTournament(tournamentId, teamId) {
+    const result = await this.request(
+      `/tournaments/${tournamentId}/invite-team`,
+      {
+        method: "POST",
+        body: JSON.stringify({ team_id: teamId }),
+      }
+    );
+    return result.data.entry;
+  }
+
+  async approveTournamentTeam(tournamentId, entryId) {
+    const result = await this.request(
+      `/tournaments/${tournamentId}/teams/${entryId}/approve`,
+      { method: "POST" }
+    );
+    return result.data.entry;
+  }
+
+  async rejectTournamentTeam(tournamentId, entryId) {
+    return this.request(
+      `/tournaments/${tournamentId}/teams/${entryId}/reject`,
+      { method: "POST" }
+    );
+  }
+
+  async getAvailableTeamsForTournament(tournamentId, q = "") {
+    const query = new URLSearchParams();
+    if (q) query.append("q", q);
+    const result = await this.request(
+      `/tournaments/${tournamentId}/available-teams?${query.toString()}`
+    );
+    return result.data.teams;
+  }
+
+  async closeTournamentRegistration(tournamentId) {
+    const result = await this.request(
+      `/tournaments/${tournamentId}/close-registration`,
+      { method: "POST" }
+    );
+    return result.data;
+  }
+
+  async getTournamentPayout(tournamentId) {
+    const result = await this.request(`/tournaments/${tournamentId}/payout`);
+    return result.data.payout;
+  }
+
+  // ── Captain: tournament actions for their team ──
+  async requestTeamToTournament(teamId, tournamentId) {
+    const result = await this.request(`/teams/${teamId}/request-tournament`, {
+      method: "POST",
+      body: JSON.stringify({ tournament_id: tournamentId }),
+    });
+    return result.data.entry;
+  }
+
+  async acceptTournamentInvite(teamId, entryId) {
+    const result = await this.request(
+      `/teams/${teamId}/invitations/${entryId}/accept`,
+      { method: "POST" }
+    );
+    return result.data.entry;
+  }
+
+  async declineTournamentInvite(teamId, entryId) {
+    return this.request(
+      `/teams/${teamId}/invitations/${entryId}/decline`,
+      { method: "POST" }
+    );
   }
 
   // ── Organizers ──

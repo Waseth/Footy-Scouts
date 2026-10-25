@@ -128,13 +128,13 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
+            {/* <Link
               href="/search"
               className="text-white/70 hover:text-white transition"
               aria-label="Search"
             >
               <Search className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Link>
+            </Link> */}
 
             {isLoggedIn && (
               <Link
@@ -195,7 +195,7 @@ export default function Navbar() {
                   }}
                   className="hidden sm:inline-flex items-center gap-1 sm:gap-2 px-3 py-1.5 rounded-lg border font-medium text-xs sm:text-sm"
                 >
-                  <LogIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                  {/* <LogIn className="w-3 h-3 sm:w-4 sm:h-4" /> */}
                   <span style={{ color: GOLD }}>Login</span>
                 </Link>
                 <Link
@@ -206,7 +206,7 @@ export default function Navbar() {
                   }}
                   className="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm"
                 >
-                  <LogIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                  {/* <LogIn className="w-3 h-3 sm:w-4 sm:h-4" /> */}
                   <span style={{ color: DARK }}>Sign up</span>
                 </Link>
               </div>

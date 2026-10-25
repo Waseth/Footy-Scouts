@@ -126,7 +126,7 @@ function GuestHome() {
               href="/about"
               className="flex items-center gap-2 rounded-md bg-[#1C1928] border border-[#D4AF6A]/30 px-4 md:px-6 py-2.5 md:py-3.5 text-sm md:text-base font-medium text-[#D4AF6A] transition hover:bg-[#D4AF6A] hover:text-[#1C1928]"
             >
-              Find out more →
+              Find out more
             </Link>
             <Link
               href="/signup"
@@ -293,7 +293,7 @@ function LoggedInHome() {
                 className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm md:text-base font-medium hover:bg-[#D4AF6A]/90 transition"
               >
                 <LayoutDashboard className="w-4 h-4" />
-                Dashboard
+                 Access your dashboard for more
               </Link>
               {!isAdmin && (
                 <Link
@@ -576,7 +576,7 @@ function FeaturedSection({
             onClick={onSeeMore}
             className="inline-block rounded-md border border-[#D4AF6A]/30 px-6 py-2.5 text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928] transition text-sm md:text-base"
           >
-            {seeMoreLabel || "See more →"}
+            {seeMoreLabel || "See more "}
           </button>
         </div>
       </div>
@@ -613,7 +613,7 @@ function FeaturedTournamentsSection({ loading, items, onSeeMore }) {
               onClick={onSeeMore}
               className="inline-block rounded-md border border-[#D4AF6A]/30 px-6 py-2.5 text-[#D4AF6A] hover:bg-[#D4AF6A] hover:text-[#1C1928] transition text-sm md:text-base"
             >
-              See more tournaments →
+              See more tournaments
             </button>
           </div>
         </div>

@@ -14,6 +14,9 @@ from ....services.notification_service import NotificationService
 from ....utils.decorators import get_current_user
 from ....utils.helpers import success_response, error_response
 from ....utils.pagination import paginate_query
+from ....utils.tournament_conflicts import (
+    find_player_tournament_conflict, find_team_conflict,
+)
 from ....utils.validators import (
     validate_file_extension, validate_file_size,
     ALLOWED_EXTENSIONS_IMAGE, MAX_IMAGE_SIZE,
@@ -33,7 +36,6 @@ def _captain_or_403(team, user):
 
 
 def _has_active_tournament_entries(team):
-    """True if team has any TournamentTeam in INVITED/JOIN_REQUESTED/ACCEPTED/REGISTERED."""
     active_statuses = [
         TournamentTeam.STATUS_INVITED,
         TournamentTeam.STATUS_JOIN_REQUESTED,
@@ -47,7 +49,6 @@ def _has_active_tournament_entries(team):
 
 
 def _team_locked_by_registration(team):
-    """True if team is REGISTERED for any tournament → cannot edit squad."""
     return TournamentTeam.query.filter(
         TournamentTeam.team_id == team.id,
         TournamentTeam.status == TournamentTeam.STATUS_REGISTERED,
@@ -55,21 +56,14 @@ def _team_locked_by_registration(team):
 
 
 def _ensure_player_profile(user):
-    """
-    Guarantee the user has a Player profile.
-    If they signed up as PLAYER but skipped onboarding → auto-create.
-    Returns (player, error_response). One of them will be None.
-    """
     if user.player_profile:
         return user.player_profile, None
-
     if user.role_name != Role.PLAYER:
         return None, error_response(
             "You must have a player profile to use this feature",
             403,
             errors={'code': 'PLAYER_PROFILE_REQUIRED'},
         )
-
     player = Player(
         user_id=user.id,
         full_name=(user.email.split('@')[0] if user.email else 'New Player'),
@@ -87,7 +81,6 @@ def _ensure_player_profile(user):
 @jwt_required()
 def create_team():
     user = get_current_user()
-
     player, err = _ensure_player_profile(user)
     if err:
         return err
@@ -106,14 +99,12 @@ def create_team():
     )
     db.session.add(team)
     db.session.flush()
-
     db.session.add(TeamMember(
         team_id=team.id,
         user_id=user.id,
         status=TeamMember.STATUS_ACTIVE,
     ))
     db.session.commit()
-
     return success_response(data={'team': team.to_dict(public=False)}, status_code=201)
 
 
@@ -161,6 +152,35 @@ def get_team(team_id):
         ).order_by(PlayerInvitation.created_at.desc()).all()
         data['sent_invitations'] = [i.to_dict() for i in invites]
 
+        tournament_invs = TournamentTeam.query.filter_by(
+            team_id=team.id,
+            status=TournamentTeam.STATUS_INVITED,
+        ).order_by(TournamentTeam.created_at.desc()).all()
+
+        data['tournament_invitations'] = [
+            {
+                'id': t.id,
+                'tournament_id': t.tournament_id,
+                'tournament_name': t.tournament.tournament_name if t.tournament else None,
+                'tournament_type': t.tournament.tournament_type if t.tournament else None,
+                'location': t.tournament.location if t.tournament else None,
+                'start_date': (
+                    t.tournament.start_date.isoformat()
+                    if t.tournament and t.tournament.start_date else None
+                ),
+                'end_date': (
+                    t.tournament.end_date.isoformat()
+                    if t.tournament and t.tournament.end_date else None
+                ),
+                'min_players_per_team': t.tournament.min_players_per_team if t.tournament else 0,
+                'max_players_per_team': t.tournament.max_players_per_team if t.tournament else 0,
+                'team_entry_fee': float(t.tournament.team_entry_fee) if t.tournament else 0,
+                'fee_currency': t.tournament.fee_currency if t.tournament else 'KES',
+                'created_at': t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in tournament_invs
+        ]
+
     return success_response(data=data)
 
 
@@ -171,7 +191,6 @@ def update_team(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     err = _captain_or_403(team, user)
     if err:
         return err
@@ -184,7 +203,6 @@ def update_team(team_id):
         team.name = name[:255]
     if 'description' in data:
         team.description = (data.get('description') or '').strip() or None
-
     db.session.commit()
     return success_response(data={'team': team.to_dict(public=False)})
 
@@ -196,18 +214,15 @@ def delete_team(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     err = _captain_or_403(team, user)
     if err:
         return err
-
     if _has_active_tournament_entries(team):
         return error_response(
             "Cannot delete a team with active tournament entries",
             400,
             errors={'code': 'TEAM_IN_USE'},
         )
-
     db.session.delete(team)
     db.session.commit()
     return success_response(message="Team deleted")
@@ -225,23 +240,18 @@ def upload_team_logo(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     err = _captain_or_403(team, user)
     if err:
         return err
-
     if 'file' not in request.files:
         return error_response("No file provided", 400)
-
     file = request.files['file']
     if not file.filename:
         return error_response("No file selected", 400)
-
     if not validate_file_extension(file.filename, ALLOWED_EXTENSIONS_IMAGE):
         return error_response("Invalid image format", 400)
     if not validate_file_size(file.stream, MAX_IMAGE_SIZE):
         return error_response("File too large. Max 10MB.", 400)
-
     try:
         if team.logo_public_id:
             try:
@@ -281,25 +291,20 @@ def remove_member(team_id, member_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     err = _captain_or_403(team, user)
     if err:
         return err
-
     if _team_locked_by_registration(team):
         return error_response(
             "Squad is locked after tournament registration",
             400,
             errors={'code': 'SQUAD_LOCKED'},
         )
-
     member = TeamMember.query.filter_by(id=member_id, team_id=team.id).first()
     if not member:
         return error_response("Member not found", 404)
-
     if member.user_id == team.captain_user_id:
         return error_response("Captain cannot be removed from the team", 400)
-
     member.status = TeamMember.STATUS_REMOVED
     member.removed_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -313,23 +318,22 @@ def leave_team(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     if team.captain_user_id == user.id:
-        return error_response("Captain cannot leave the team. Delete it or transfer captaincy first.", 400)
-
+        return error_response(
+            "Captain cannot leave the team. Delete it or transfer captaincy first.",
+            400,
+        )
     if _team_locked_by_registration(team):
         return error_response(
             "You cannot leave a team that's registered for a tournament",
             400,
             errors={'code': 'SQUAD_LOCKED'},
         )
-
     member = TeamMember.query.filter_by(
         team_id=team.id, user_id=user.id, status=TeamMember.STATUS_ACTIVE,
     ).first()
     if not member:
         return error_response("You're not a member of this team", 404)
-
     member.status = TeamMember.STATUS_REMOVED
     member.removed_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -348,7 +352,6 @@ def invite_player(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     err = _captain_or_403(team, user)
     if err:
         return err
@@ -356,7 +359,6 @@ def invite_player(team_id):
     data = request.get_json() or {}
     player_user_id = data.get('user_id')
     message = (data.get('message') or '').strip() or None
-
     if not player_user_id:
         return error_response("user_id is required", 400)
 
@@ -401,7 +403,6 @@ def invite_player(team_id):
         )
     except Exception:
         pass
-
     return success_response(data={'invitation': invite.to_dict()}, status_code=201)
 
 
@@ -415,13 +416,11 @@ def cancel_invitation(team_id, invite_id):
     err = _captain_or_403(team, user)
     if err:
         return err
-
     invite = PlayerInvitation.query.filter_by(
         id=invite_id, team_id=team.id, status=PlayerInvitation.STATUS_PENDING,
     ).first()
     if not invite:
         return error_response("Invitation not found", 404)
-
     invite.status = PlayerInvitation.STATUS_CANCELLED
     invite.responded_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -429,7 +428,7 @@ def cancel_invitation(team_id, invite_id):
 
 
 # ─────────────────────────────────────────────────────────────
-#  Captain handles join requests
+#  Captain handles join requests — WITH tournament overlap check
 # ─────────────────────────────────────────────────────────────
 
 @teams_bp.route('/<team_id>/join-requests', methods=['GET'])
@@ -442,7 +441,6 @@ def list_join_requests(team_id):
     err = _captain_or_403(team, user)
     if err:
         return err
-
     requests = PlayerJoinRequest.query.filter_by(
         team_id=team.id, status=PlayerJoinRequest.STATUS_PENDING,
     ).order_by(PlayerJoinRequest.created_at.desc()).all()
@@ -452,6 +450,11 @@ def list_join_requests(team_id):
 @teams_bp.route('/<team_id>/join-requests/<request_id>/accept', methods=['POST'])
 @jwt_required()
 def accept_join_request(team_id, request_id):
+    """
+    Captain accepts a player's request to join the team.
+    If the team is already ACCEPTED or REGISTERED in a tournament,
+    check that the player isn't in another overlapping tournament.
+    """
     user = get_current_user()
     team = db.session.get(Team, team_id)
     if not team:
@@ -479,6 +482,32 @@ def accept_join_request(team_id, request_id):
         db.session.commit()
         return error_response("Player is already on the team", 409)
 
+    # 🆕 Tournament overlap check
+    # If this team is in a tournament (ACCEPTED or REGISTERED), ensure the
+    # player isn't already on another team in an overlapping tournament.
+    active_entries = TournamentTeam.query.filter(
+        TournamentTeam.team_id == team.id,
+        TournamentTeam.status.in_([
+            TournamentTeam.STATUS_ACCEPTED,
+            TournamentTeam.STATUS_REGISTERED,
+        ]),
+    ).all()
+
+    for entry in active_entries:
+        conflict = find_player_tournament_conflict(target.id, entry.tournament)
+        if conflict:
+            return error_response(
+                f"{target.player_profile.full_name} is already committed to "
+                f"another tournament that overlaps with {entry.tournament.tournament_name} "
+                f"({conflict.tournament_name}).",
+                409,
+                errors={
+                    'code': 'TOURNAMENT_DATE_CONFLICT',
+                    'conflict_tournament': conflict.tournament_name,
+                    'target_tournament': entry.tournament.tournament_name,
+                },
+            )
+
     db.session.add(TeamMember(
         team_id=team.id,
         user_id=target.id,
@@ -494,7 +523,6 @@ def accept_join_request(team_id, request_id):
         )
     except Exception:
         pass
-
     return success_response(message="Player added to team")
 
 
@@ -508,24 +536,20 @@ def reject_join_request(team_id, request_id):
     err = _captain_or_403(team, user)
     if err:
         return err
-
     req = PlayerJoinRequest.query.filter_by(
         id=request_id, team_id=team.id, status=PlayerJoinRequest.STATUS_PENDING,
     ).first()
     if not req:
         return error_response("Request not found", 404)
-
     req.status = PlayerJoinRequest.STATUS_REJECTED
     req.responded_at = datetime.now(timezone.utc)
     db.session.commit()
-
     try:
         NotificationService.notify_join_request_rejected(
             player_user_id=req.user_id, team_name=team.name, team_id=team.id,
         )
     except Exception:
         pass
-
     return success_response(message="Request rejected")
 
 
@@ -537,8 +561,11 @@ def reject_join_request(team_id, request_id):
 @jwt_required()
 @limiter.limit("20 per hour")
 def request_join(team_id):
+    """
+    Player requests to join a team.
+    If the team is already in a tournament, check overlap first.
+    """
     user = get_current_user()
-
     _, err = _ensure_player_profile(user)
     if err:
         return err
@@ -546,7 +573,6 @@ def request_join(team_id):
     team = db.session.get(Team, team_id)
     if not team:
         return error_response("Team not found", 404)
-
     if team.captain_user_id == user.id:
         return error_response("You're already the captain of this team", 400)
 
@@ -561,6 +587,29 @@ def request_join(team_id):
     ).first()
     if pending:
         return error_response("You already have a pending request for this team", 409)
+
+    # 🆕 If team is already in a tournament, check overlap before accepting request
+    active_entries = TournamentTeam.query.filter(
+        TournamentTeam.team_id == team.id,
+        TournamentTeam.status.in_([
+            TournamentTeam.STATUS_ACCEPTED,
+            TournamentTeam.STATUS_REGISTERED,
+        ]),
+    ).all()
+
+    for entry in active_entries:
+        conflict = find_player_tournament_conflict(user.id, entry.tournament)
+        if conflict:
+            return error_response(
+                f"You're already committed to another tournament that overlaps with "
+                f"{entry.tournament.tournament_name} ({conflict.tournament_name}).",
+                409,
+                errors={
+                    'code': 'TOURNAMENT_DATE_CONFLICT',
+                    'conflict_tournament': conflict.tournament_name,
+                    'target_tournament': entry.tournament.tournament_name,
+                },
+            )
 
     data = request.get_json() or {}
     message = (data.get('message') or '').strip() or None
@@ -584,12 +633,11 @@ def request_join(team_id):
         )
     except Exception:
         pass
-
     return success_response(data={'request': req.to_dict()}, status_code=201)
 
 
 # ─────────────────────────────────────────────────────────────
-#  Player search — for captain to find people to invite
+#  Player search
 # ─────────────────────────────────────────────────────────────
 
 @teams_bp.route('/search-players', methods=['GET'])
@@ -604,20 +652,16 @@ def search_players():
         User.is_suspended == False,
         Player.user_id != user.id,
     )
-
     if q:
         query = query.filter(Player.full_name.ilike(f'%{q}%'))
-
     if team_id:
         team = db.session.get(Team, team_id)
         if team and team.captain_user_id == user.id:
             existing_ids = [m.user_id for m in team.active_members()]
             if existing_ids:
                 query = query.filter(~Player.user_id.in_(existing_ids))
-
     query = query.order_by(Player.full_name.asc()).limit(20)
     players = query.all()
-
     return success_response(data={
         'players': [
             {
@@ -631,3 +675,278 @@ def search_players():
             for p in players
         ]
     })
+
+
+# ─────────────────────────────────────────────────────────────
+#  Team requests to join a tournament — WITH overlap check
+# ─────────────────────────────────────────────────────────────
+
+@teams_bp.route('/<team_id>/request-tournament', methods=['POST'])
+@jwt_required()
+@limiter.limit("20 per hour")
+def request_tournament(team_id):
+    """
+    Captain requests to enter their team into a tournament.
+    Checks:
+      1. Registration is open
+      2. Team not already in this tournament
+      3. Team meets min players
+      4. No squad member is in another overlapping tournament
+      5. Tournament not full
+    """
+    from ....models import Tournament
+
+    user = get_current_user()
+    team = db.session.get(Team, team_id)
+    if not team:
+        return error_response("Team not found", 404)
+    err = _captain_or_403(team, user)
+    if err:
+        return err
+
+    data = request.get_json() or {}
+    tournament_id = data.get('tournament_id')
+    if not tournament_id:
+        return error_response("tournament_id is required", 400)
+
+    tournament = db.session.get(Tournament, tournament_id)
+    if not tournament:
+        return error_response("Tournament not found", 404)
+
+    if tournament.status not in [
+        Tournament.ST_REGISTRATION_OPEN,
+        Tournament.ST_FILLING_TEAMS,
+    ]:
+        return error_response(
+            "Registration is not open for this tournament", 400,
+            errors={'code': 'NOT_OPEN'},
+        )
+
+    existing = TournamentTeam.query.filter_by(
+        tournament_id=tournament.id, team_id=team.id,
+    ).first()
+    if existing:
+        return error_response(
+            f"This team already has a status for this tournament: {existing.status}",
+            409,
+        )
+
+    # Squad capacity
+    member_count = team.active_members_count()
+    if member_count < tournament.min_players_per_team:
+        return error_response(
+            f"Team has {member_count} player(s) but this tournament requires "
+            f"at least {tournament.min_players_per_team}. Add more players first.",
+            400,
+            errors={
+                'code': 'TEAM_UNDERSTAFFED',
+                'current': member_count,
+                'required': tournament.min_players_per_team,
+                'missing': tournament.min_players_per_team - member_count,
+            },
+        )
+
+    # 🆕 Tournament overlap check
+    conflict = find_team_conflict(team, tournament)
+    if conflict:
+        player_id, conflicting_t = conflict
+        player = db.session.get(User, player_id)
+        player_name = (
+            player.player_profile.full_name if player and player.player_profile
+            else player.email if player else "A player"
+        )
+        return error_response(
+            f"{player_name} is already committed to another overlapping tournament "
+            f"({conflicting_t.tournament_name}). Remove them or choose a team without "
+            f"conflicting tournaments.",
+            409,
+            errors={
+                'code': 'TOURNAMENT_DATE_CONFLICT',
+                'player_id': player_id,
+                'player_name': player_name,
+                'conflict_tournament': conflicting_t.tournament_name,
+                'target_tournament': tournament.tournament_name,
+            },
+        )
+
+    # Slot availability
+    occupied = TournamentTeam.query.filter(
+        TournamentTeam.tournament_id == tournament.id,
+        TournamentTeam.status.in_([
+            TournamentTeam.STATUS_ACCEPTED,
+            TournamentTeam.STATUS_REGISTERED,
+        ]),
+    ).count()
+    if occupied >= tournament.required_teams:
+        return error_response(
+            "Tournament is already full", 400,
+            errors={'code': 'TOURNAMENT_FULL'},
+        )
+
+    entry = TournamentTeam(
+        tournament_id=tournament.id,
+        team_id=team.id,
+        status=TournamentTeam.STATUS_JOIN_REQUESTED,
+        invited_by_organizer=False,
+    )
+    db.session.add(entry)
+    db.session.commit()
+
+    try:
+        NotificationService.create(
+            user_id=tournament.organizer_user_id,
+            title="New tournament join request",
+            body=f"{team.name} has requested to join {tournament.tournament_name}.",
+            notification_type="TOURNAMENT",
+            related_id=tournament.id,
+            related_type="Tournament",
+        )
+    except Exception:
+        pass
+
+    return success_response(
+        data={'entry': entry.to_dict()},
+        status_code=201,
+        message="Join request sent to organizer.",
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+#  Captain accepts / declines tournament invite — WITH overlap check
+# ─────────────────────────────────────────────────────────────
+
+@teams_bp.route('/<team_id>/invitations/<entry_id>/accept', methods=['POST'])
+@jwt_required()
+def accept_tournament_invite(team_id, entry_id):
+    """
+    Captain accepts an INVITED tournament entry → ACCEPTED.
+    Checks:
+      1. Entry status is INVITED
+      2. Squad meets min players
+      3. No squad member is in another overlapping tournament
+      4. Tournament not full
+    """
+    from ....models import Tournament
+
+    user = get_current_user()
+    team = db.session.get(Team, team_id)
+    if not team:
+        return error_response("Team not found", 404)
+    err = _captain_or_403(team, user)
+    if err:
+        return err
+
+    entry = TournamentTeam.query.filter_by(
+        id=entry_id, team_id=team.id,
+    ).first()
+    if not entry:
+        return error_response("Invitation not found", 404)
+    if entry.status != TournamentTeam.STATUS_INVITED:
+        return error_response(
+            f"Cannot accept invite in {entry.status} status", 400,
+        )
+
+    tournament = db.session.get(Tournament, entry.tournament_id)
+    if not tournament:
+        return error_response("Tournament not found", 404)
+
+    # Squad capacity
+    member_count = team.active_members_count()
+    if member_count < tournament.min_players_per_team:
+        return error_response(
+            f"Your team has {member_count} player(s). You need at least "
+            f"{tournament.min_players_per_team} to accept this invitation.",
+            400,
+            errors={
+                'code': 'TEAM_UNDERSTAFFED',
+                'current': member_count,
+                'required': tournament.min_players_per_team,
+                'missing': tournament.min_players_per_team - member_count,
+            },
+        )
+
+    # 🆕 Tournament overlap check
+    conflict = find_team_conflict(team, tournament)
+    if conflict:
+        player_id, conflicting_t = conflict
+        player = db.session.get(User, player_id)
+        player_name = (
+            player.player_profile.full_name if player and player.player_profile
+            else player.email if player else "A player"
+        )
+        return error_response(
+            f"{player_name} is already committed to another overlapping tournament "
+            f"({conflicting_t.tournament_name}). Your team cannot accept this invite "
+            f"until that conflict is resolved.",
+            409,
+            errors={
+                'code': 'TOURNAMENT_DATE_CONFLICT',
+                'player_id': player_id,
+                'player_name': player_name,
+                'conflict_tournament': conflicting_t.tournament_name,
+                'target_tournament': tournament.tournament_name,
+            },
+        )
+
+    # Tournament capacity
+    occupied = TournamentTeam.query.filter(
+        TournamentTeam.tournament_id == tournament.id,
+        TournamentTeam.status.in_([
+            TournamentTeam.STATUS_ACCEPTED,
+            TournamentTeam.STATUS_REGISTERED,
+        ]),
+    ).count()
+    if occupied >= tournament.required_teams:
+        entry.status = TournamentTeam.STATUS_REJECTED
+        entry.responded_at = datetime.now(timezone.utc)
+        db.session.commit()
+        return error_response(
+            "Tournament is already full — cannot accept", 400,
+            errors={'code': 'TOURNAMENT_FULL'},
+        )
+
+    entry.status = TournamentTeam.STATUS_ACCEPTED
+    entry.responded_at = datetime.now(timezone.utc)
+
+    if tournament.status == Tournament.ST_REGISTRATION_OPEN:
+        tournament.status = Tournament.ST_FILLING_TEAMS
+
+    db.session.commit()
+
+    try:
+        NotificationService.create(
+            user_id=tournament.organizer_user_id,
+            title="Invitation accepted",
+            body=f"{team.name} accepted your invitation to join {tournament.tournament_name}.",
+            notification_type="TOURNAMENT",
+            related_id=tournament.id,
+            related_type="Tournament",
+        )
+    except Exception:
+        pass
+    return success_response(data={'entry': entry.to_dict()}, message="Invitation accepted")
+
+
+@teams_bp.route('/<team_id>/invitations/<entry_id>/decline', methods=['POST'])
+@jwt_required()
+def decline_tournament_invite(team_id, entry_id):
+    user = get_current_user()
+    team = db.session.get(Team, team_id)
+    if not team:
+        return error_response("Team not found", 404)
+    err = _captain_or_403(team, user)
+    if err:
+        return err
+    entry = TournamentTeam.query.filter_by(
+        id=entry_id, team_id=team.id,
+    ).first()
+    if not entry:
+        return error_response("Invitation not found", 404)
+    if entry.status != TournamentTeam.STATUS_INVITED:
+        return error_response(
+            f"Cannot decline invite in {entry.status} status", 400,
+        )
+    entry.status = TournamentTeam.STATUS_REJECTED
+    entry.responded_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return success_response(message="Invitation declined")

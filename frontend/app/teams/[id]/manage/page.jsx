@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowLeft, Shield, Users, Loader2, UserPlus, Trash2, Check, X, Upload,
+  Trophy, MapPin, Calendar,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -13,6 +14,7 @@ import Footer from "@/components/Footer";
 import InvitePlayerModal from "@/components/InvitePlayerModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import ImageCropModal from "@/components/ImageCropModal";
+import ThemedAlert from "@/components/ThemedAlert";
 
 export default function ManageTeamPage() {
   const params = useParams();
@@ -21,9 +23,14 @@ export default function ManageTeamPage() {
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
+  const [alert, setAlert] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [cropFile, setCropFile] = useState(null);
   const [error, setError] = useState("");
+
+  const [acceptingTournament, setAcceptingTournament] = useState(null);
+  const [decliningTournament, setDecliningTournament] = useState(null);
+
   const logoInputRef = useRef(null);
 
   const load = async () => {
@@ -57,7 +64,7 @@ export default function ManageTeamPage() {
           await api.removeTeamMember(data.team.id, member.id);
           await load();
         } catch (e) {
-          setError(e.message);
+          setAlert({ title: "Could not remove", body: e.message, variant: "danger" });
         }
       },
     });
@@ -68,7 +75,7 @@ export default function ManageTeamPage() {
       await api.acceptJoinRequest(data.team.id, req.id);
       await load();
     } catch (e) {
-      setError(e.message);
+      setAlert({ title: "Could not accept", body: e.message, variant: "danger" });
     }
   };
 
@@ -77,7 +84,7 @@ export default function ManageTeamPage() {
       await api.rejectJoinRequest(data.team.id, req.id);
       await load();
     } catch (e) {
-      setError(e.message);
+      setAlert({ title: "Could not reject", body: e.message, variant: "danger" });
     }
   };
 
@@ -92,7 +99,7 @@ export default function ManageTeamPage() {
           await api.cancelInvitation(data.team.id, invite.id);
           await load();
         } catch (e) {
-          setError(e.message);
+          setAlert({ title: "Could not cancel", body: e.message, variant: "danger" });
         }
       },
     });
@@ -112,11 +119,57 @@ export default function ManageTeamPage() {
       await api.uploadTeamLogo(data.team.id, file);
       await load();
     } catch (e) {
-      setError(e.message);
+      setAlert({ title: "Logo upload failed", body: e.message, variant: "danger" });
     } finally {
       setUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
     }
+  };
+
+  // Tournament invite handling
+  const handleAcceptTournamentInvite = async (inv) => {
+    setAcceptingTournament(inv.id);
+    try {
+      await api.acceptTournamentInvite(data.team.id, inv.id);
+      await load();
+      setAlert({
+        title: "Tournament invitation accepted",
+        body: `Your team is now accepted into ${inv.tournament_name}. Next step: complete your squad and pay the entry fee.`,
+        variant: "success",
+      });
+    } catch (e) {
+      setAlert({
+        title: "Could not accept invitation",
+        body: e.message || "Try again.",
+        variant: "danger",
+      });
+    } finally {
+      setAcceptingTournament(null);
+    }
+  };
+
+  const handleDeclineTournamentInvite = async (inv) => {
+    setConfirmState({
+      title: "Decline tournament invitation?",
+      body: `Your team will not participate in ${inv.tournament_name}.`,
+      confirmLabel: "Decline",
+      destructive: true,
+      onConfirm: async () => {
+        setDecliningTournament(inv.id);
+        try {
+          await api.declineTournamentInvite(data.team.id, inv.id);
+          await load();
+        } catch (e) {
+          setAlert({
+            title: "Could not decline invitation",
+            body: e.message,
+            variant: "danger",
+          });
+        } finally {
+          setDecliningTournament(null);
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -142,7 +195,7 @@ export default function ManageTeamPage() {
     );
   }
 
-  const { team, members, join_requests = [], sent_invitations = [] } = data;
+  const { team, members, join_requests = [], sent_invitations = [], tournament_invitations = [] } = data;
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -166,7 +219,13 @@ export default function ManageTeamPage() {
           <div className="flex items-center gap-5 flex-wrap">
             <div className="relative w-24 h-24 rounded-xl bg-[#D4AF6A]/20 flex items-center justify-center overflow-hidden">
               {team.logo_url ? (
-                <Image src={team.logo_url} alt={team.name} width={96} height={96} className="object-cover" />
+                <Image
+                  src={team.logo_url}
+                  alt={team.name}
+                  width={96}
+                  height={96}
+                  className="object-cover"
+                />
               ) : (
                 <Shield className="w-10 h-10 text-[#D4AF6A]" />
               )}
@@ -199,7 +258,110 @@ export default function ManageTeamPage() {
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Tournament invitations */}
+        {tournament_invitations.length > 0 && (
+          <div className="bg-[#242030] rounded-xl border border-[#D4AF6A]/40 p-6 mb-6">
+            <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-[#D4AF6A]" />
+              Tournament invitations ({tournament_invitations.length})
+            </h2>
+            <div className="space-y-3">
+              {tournament_invitations.map((inv) => {
+                const meetsMin = (members.length || 0) >= (inv.min_players_per_team || 0);
+                const shortfall = (inv.min_players_per_team || 0) - (members.length || 0);
+
+                return (
+                  <div
+                    key={inv.id}
+                    className="rounded-lg border border-white/10 bg-[#1C1928] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold">
+                          {inv.tournament_name || "Tournament"}
+                        </h3>
+                        {inv.tournament_type && (
+                          <p className="text-xs text-white/50 mt-0.5">
+                            {inv.tournament_type}
+                          </p>
+                        )}
+                      </div>
+                      {inv.team_entry_fee > 0 && (
+                        <span className="text-xs text-[#D4AF6A] font-medium">
+                          {inv.fee_currency} {inv.team_entry_fee.toLocaleString()} entry
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 text-xs text-white/50 mb-3">
+                      {inv.location && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {inv.location}
+                        </span>
+                      )}
+                      {inv.start_date && (
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(inv.start_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      className={`rounded-md border px-3 py-2 mb-3 text-xs ${
+                        meetsMin
+                          ? "border-green-500/20 bg-green-500/5 text-green-400"
+                          : "border-yellow-500/20 bg-yellow-500/5 text-yellow-400"
+                      }`}
+                    >
+                      {meetsMin ? (
+                        <>✓ Squad meets the minimum of {inv.min_players_per_team} players</>
+                      ) : (
+                        <>
+                          ⚠ Your squad has {members.length} player
+                          {members.length !== 1 ? "s" : ""}. Add{" "}
+                          {shortfall} more to accept — tournament requires a
+                          minimum of {inv.min_players_per_team}.
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAcceptTournamentInvite(inv)}
+                        disabled={!meetsMin || acceptingTournament === inv.id}
+                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                          meetsMin
+                            ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                            : "bg-white/10 text-white/30 cursor-not-allowed"
+                        } disabled:opacity-50`}
+                        title={meetsMin ? "Accept invite" : "Fill your squad first"}
+                      >
+                        {acceptingTournament === inv.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Check className="w-3 h-3" />
+                        )}
+                        {meetsMin ? "Accept" : "Squad too small"}
+                      </button>
+                      <button
+                        onClick={() => handleDeclineTournamentInvite(inv)}
+                        disabled={decliningTournament === inv.id}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-500/20 text-red-400 px-3 py-1.5 text-xs font-medium hover:bg-red-500/30 transition disabled:opacity-50"
+                      >
+                        <X className="w-3 h-3" />
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Add player */}
         <div className="mb-6">
           <button
             onClick={() => setShowInvite(true)}
@@ -209,7 +371,7 @@ export default function ManageTeamPage() {
           </button>
         </div>
 
-        {/* Pending join requests */}
+        {/* Join requests */}
         {join_requests.length > 0 && (
           <div className="bg-[#242030] rounded-xl border border-white/10 p-6 mb-6">
             <h2 className="text-white font-semibold mb-4">
@@ -223,7 +385,13 @@ export default function ManageTeamPage() {
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] font-bold shrink-0">
                     {r.player_picture_url ? (
-                      <Image src={r.player_picture_url} alt="" width={40} height={40} className="object-cover" />
+                      <Image
+                        src={r.player_picture_url}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className="object-cover"
+                      />
                     ) : (
                       r.player_name?.[0] || "?"
                     )}
@@ -260,7 +428,7 @@ export default function ManageTeamPage() {
         {sent_invitations.length > 0 && (
           <div className="bg-[#242030] rounded-xl border border-white/10 p-6 mb-6">
             <h2 className="text-white font-semibold mb-4">
-              Pending invitations ({sent_invitations.length})
+              Pending player invitations ({sent_invitations.length})
             </h2>
             <div className="space-y-2">
               {sent_invitations.map((i) => (
@@ -272,9 +440,7 @@ export default function ManageTeamPage() {
                     <p className="text-sm text-white font-medium">
                       Invitation sent
                     </p>
-                    <p className="text-xs text-white/50">
-                      Awaiting response
-                    </p>
+                    <p className="text-xs text-white/50">Awaiting response</p>
                   </div>
                   <button
                     onClick={() => handleCancelInvite(i)}
@@ -290,7 +456,9 @@ export default function ManageTeamPage() {
 
         {/* Squad */}
         <div className="bg-[#242030] rounded-xl border border-white/10 p-6">
-          <h2 className="text-white font-semibold mb-4">Squad ({members.length})</h2>
+          <h2 className="text-white font-semibold mb-4">
+            Squad ({members.length})
+          </h2>
           {members.length === 0 ? (
             <p className="text-white/40 text-sm">No players yet.</p>
           ) : (
@@ -302,7 +470,13 @@ export default function ManageTeamPage() {
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] font-bold shrink-0">
                     {m.player_picture_url ? (
-                      <Image src={m.player_picture_url} alt="" width={40} height={40} className="object-cover" />
+                      <Image
+                        src={m.player_picture_url}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className="object-cover"
+                      />
                     ) : (
                       m.player_name?.[0] || "?"
                     )}
@@ -352,6 +526,8 @@ export default function ManageTeamPage() {
           aspect={1}
         />
       )}
+
+      <ThemedAlert state={alert} onClose={() => setAlert(null)} />
     </div>
   );
 }

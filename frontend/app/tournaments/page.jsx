@@ -1,241 +1,359 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Calendar, MapPin, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
-import { api } from '@/lib/api';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import CustomSelect from '@/components/CustomSelect';
-
-const GUEST_LIMIT = 3;
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  Loader2, Trophy, Users, Calendar, MapPin, Lock, Shield,
+  Plus, ArrowRight, Eye,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import ThemedAlert from "@/components/ThemedAlert";
 
 export default function TournamentsPage() {
+  const router = useRouter();
   const [tournaments, setTournaments] = useState([]);
+  const [myTeams, setMyTeams] = useState([]);
+  const [myTournaments, setMyTournaments] = useState([]);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [tournamentType, setTournamentType] = useState('');
-  const [location, setLocation] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-
-  const typeOptions = [
-    { value: '', label: 'All Types' },
-    { value: '5-a-side', label: '5-a-side' },
-    { value: '7-a-side', label: '7-a-side' },
-    { value: '9-a-side', label: '9-a-side' },
-    { value: '11-a-side', label: '11-a-side' },
-  ];
+  const [tab, setTab] = useState("all");
+  const [error, setError] = useState("");
+  const [alert, setAlert] = useState(null);
+  const [requesting, setRequesting] = useState(null);
+  const [pendingTournament, setPendingTournament] = useState(null);
 
   useEffect(() => {
-    setIsAuthed(api.isAuthenticated());
+    (async () => {
+      try {
+        if (api.isAuthenticated()) {
+          try {
+            const me = await api.getMe();
+            setUser(me);
+          } catch {}
+        }
+        const [tourRes, teamsRes] = await Promise.allSettled([
+          api.getTournaments({ per_page: 30 }),
+          api.isAuthenticated() ? api.getMyTeams({ per_page: 50 }) : Promise.resolve(null),
+        ]);
+        if (tourRes.status === "fulfilled") setTournaments(tourRes.value.items || []);
+        if (teamsRes.status === "fulfilled" && teamsRes.value) {
+          setMyTeams(teamsRes.value.items || []);
+        }
+        if (api.isAuthenticated()) {
+          try {
+            const myTour = await api.getMyTournaments({ per_page: 50 });
+            setMyTournaments(myTour.items || []);
+          } catch {}
+        }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  useEffect(() => {
-    fetchTournaments();
-  }, [page, tournamentType, location]);
+  const handleRequestToJoin = async (tournament) => {
+    if (!api.isAuthenticated()) {
+      router.push(`/login?redirect=${encodeURIComponent("/tournaments")}`);
+      return;
+    }
+    setPendingTournament(tournament);
+  };
 
-  const fetchTournaments = async () => {
-    setLoading(true);
-    try {
-      const authed = api.isAuthenticated();
-      const result = await api.getTournaments({
-        page: authed ? page : 1,
-        per_page: authed ? 9 : GUEST_LIMIT,
-        type: tournamentType || undefined,
-        location: location || undefined,
+  const handlePickTeam = async (team) => {
+    const tournament = pendingTournament;
+    if (!tournament) return;
+    if (team.member_count < tournament.min_players_per_team) {
+      setAlert({
+        title: "Team understaffed",
+        body: `${team.name} has ${team.member_count} player${team.member_count === 1 ? "" : "s"}, but ${tournament.tournament_name} requires at least ${tournament.min_players_per_team}. Add more players before requesting.`,
+        variant: "warning",
       });
-      setTournaments(result.items || []);
-      setTotal(result.total || 0);
-      setTotalPages(result.pages || 1);
-    } catch (error) {
-      console.error('Failed to fetch tournaments:', error);
+      return;
+    }
+    setRequesting(team.id);
+    try {
+      await api.requestTeamToTournament(team.id, tournament.id);
+      setPendingTournament(null);
+      setAlert({
+        title: "Request sent",
+        body: `${team.name} has requested to join ${tournament.tournament_name}. The organizer will respond.`,
+        variant: "success",
+      });
+    } catch (e) {
+      setAlert({ title: "Could not send request", body: e.message || "Try again.", variant: "danger" });
     } finally {
-      setLoading(false);
+      setRequesting(null);
     }
   };
 
-  const handleClearFilters = () => {
-    setTournamentType('');
-    setLocation('');
-    setPage(1);
-  };
+  const isRegistrationOpen = (status) =>
+    ["REGISTRATION_OPEN", "FILLING_TEAMS"].includes(status);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'UPCOMING': return 'bg-green-500/20 text-green-400';
-      case 'ONGOING': return 'bg-yellow-500/20 text-yellow-400';
-      case 'COMPLETED': return 'bg-blue-500/20 text-blue-400';
-      case 'CANCELLED': return 'bg-red-500/20 text-red-400';
-      default: return 'bg-white/10 text-white/60';
-    }
-  };
+  const isMine = (t) => user && t.organizer_user_id === user.id;
+
+  const displayed = tab === "mine" ? myTournaments : tournaments;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#1C1928] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#D4AF6A] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />
-
-      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 pt-20 sm:pt-24">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
+      <div className="container mx-auto px-4 py-8 pt-24 max-w-6xl">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-[#D4AF6A]">Tournaments</h1>
-            <p className="text-white mt-1 text-sm sm:text-base">
-              {isAuthed
-                ? 'Find and register for upcoming tournaments'
-                : 'Preview featured tournaments. Log in to see more.'}
+            <h1 className="text-3xl font-bold text-white">Tournaments</h1>
+            <p className="text-white/60 mt-1">
+              Browse tournaments, view details, or request to join with your team
             </p>
           </div>
-          {isAuthed && (
+          {user && (
             <Link
               href="/tournaments/create"
-              className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-[#D4AF6A] text-[#1C1928] hover:bg-[#D4AF6A]/90 transition text-center text-sm sm:text-base cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 font-medium hover:bg-[#D4AF6A]/90 transition"
             >
-              + Create Tournament
+              <Plus className="w-4 h-4" /> Create tournament
             </Link>
           )}
         </div>
 
-        {isAuthed && (
-          <div className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 mb-6 sm:mb-8">
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <CustomSelect
-                value={tournamentType}
-                onChange={setTournamentType}
-                options={typeOptions}
-                placeholder="All Types"
-                className="flex-1 min-w-[120px] max-w-[180px]"
-              />
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Location"
-                className="flex-1 min-w-[100px] max-w-[160px] px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
-              />
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer text-sm sm:text-base"
-              >
-                Clear
-              </button>
-            </div>
+        {user && (
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setTab("all")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                tab === "all"
+                  ? "bg-[#D4AF6A] text-[#1C1928]"
+                  : "border border-white/10 text-white/60 hover:border-[#D4AF6A]/40 hover:text-white"
+              }`}
+            >
+              All tournaments
+            </button>
+            <button
+              onClick={() => setTab("mine")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                tab === "mine"
+                  ? "bg-[#D4AF6A] text-[#1C1928]"
+                  : "border border-white/10 text-white/60 hover:border-[#D4AF6A]/40 hover:text-white"
+              }`}
+            >
+              My tournaments ({myTournaments.length})
+            </button>
           </div>
         )}
 
-        <div className="mb-3 sm:mb-4 text-white/60 text-sm sm:text-base">
-          {loading
-            ? 'Loading...'
-            : isAuthed
-            ? `Showing ${tournaments.length} of ${total} tournaments`
-            : `Showing ${tournaments.length} featured tournaments`}
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 animate-pulse">
-                <div className="h-4 bg-white/10 rounded w-1/3 mb-3" />
-                <div className="h-4 bg-white/10 rounded w-3/4 mb-2" />
-                <div className="h-3 bg-white/10 rounded w-1/2" />
-              </div>
-            ))}
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+            {error}
           </div>
-        ) : tournaments.length === 0 ? (
-          <div className="text-center py-8 sm:py-12">
-            <p className="text-white text-base sm:text-lg">No tournaments available at the moment</p>
+        )}
+
+        {displayed.length === 0 ? (
+          <div className="text-center py-20 rounded-2xl border border-white/10 bg-[#242030]">
+            <Trophy className="w-12 h-12 text-white/20 mx-auto mb-4" />
+            <h3 className="text-white font-semibold mb-1">
+              {tab === "mine" ? "You don't organize any tournaments" : "No tournaments yet"}
+            </h3>
+            <p className="text-white/50 text-sm mb-4">
+              {tab === "mine"
+                ? "Create a tournament to get started."
+                : "Check back later — new tournaments will appear here."}
+            </p>
+            {user && tab === "mine" && (
+              <Link
+                href="/tournaments/create"
+                className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 font-medium hover:bg-[#D4AF6A]/90 transition"
+              >
+                <Plus className="w-4 h-4" /> Create tournament
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {tournaments.map((tournament) => (
-              <Link
-                key={tournament.id}
-                href={`/tournaments/${tournament.id}`}
-                className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 hover:border-[#D4AF6A]/50 transition group cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-2 sm:mb-3">
-                  <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${getStatusColor(tournament.status)}`}>
-                    {tournament.status}
-                  </span>
-                  <span className="text-[10px] sm:text-xs text-white/40">{tournament.tournament_type}</span>
-                </div>
-                <h3 className="text-white font-semibold text-sm sm:text-base group-hover:text-[#D4AF6A] transition mb-1 line-clamp-1">
-                  {tournament.tournament_name}
-                </h3>
-                <div className="flex items-center gap-1.5 sm:gap-2 text-white/40 text-xs sm:text-sm mb-0.5 sm:mb-1">
-                  <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{tournament.location}</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 text-white/40 text-xs sm:text-sm">
-                  <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span>
-                    {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString() : 'Date TBD'}
-                  </span>
-                </div>
-                {tournament.registration_fee > 0 && (
-                  <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/10 flex items-center justify-between">
-                    <span className="text-white/60 text-xs sm:text-sm">Fee</span>
-                    <span className="text-[#D4AF6A] font-semibold text-xs sm:text-sm">
-                      {tournament.fee_currency} {tournament.registration_fee}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayed.map((t) => {
+              const mine = isMine(t);
+              const open = isRegistrationOpen(t.status);
+              return (
+                <div
+                  key={t.id}
+                  className={`rounded-xl border p-5 transition ${
+                    mine ? "border-[#D4AF6A]/50 bg-[#242030]" : "border-white/10 bg-[#242030]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
+                      open
+                        ? "bg-green-500/20 text-green-400"
+                        : t.status === "REGISTRATION_CLOSED" || t.status === "IN_PROGRESS"
+                        ? "bg-purple-500/20 text-purple-400"
+                        : t.status === "CANCELLED"
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-white/10 text-white/50"
+                    }`}>
+                      {t.status.replace(/_/g, " ")}
                     </span>
+                    {mine && (
+                      <span className="text-[10px] font-semibold text-[#D4AF6A] uppercase">
+                        You organize
+                      </span>
+                    )}
                   </div>
-                )}
-              </Link>
-            ))}
-          </div>
-        )}
 
-        {!isAuthed && !loading && tournaments.length > 0 && (
-          <div className="mt-10 flex items-start gap-4 rounded-xl border border-[#D4AF6A]/30 bg-[#D4AF6A]/10 p-6">
-            <Lock className="w-6 h-6 text-[#D4AF6A] mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-white font-semibold text-lg">See all tournaments</h3>
-              <p className="text-white/60 text-sm mt-1 mb-4">
-                Create a free account to browse all {total} tournaments and register your team.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={`/login?redirect=${encodeURIComponent('/tournaments')}`}
-                  className="rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/10 transition"
-                >
-                  Create free account
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
+                  <Link href={`/tournaments/${t.id}`}>
+                    <h3 className="text-white font-semibold text-lg mb-1 hover:text-[#D4AF6A] transition">
+                      {t.tournament_name}
+                    </h3>
+                  </Link>
+                  <p className="text-white/50 text-xs mb-3">{t.tournament_type}</p>
 
-        {isAuthed && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6 sm:mt-8">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <span className="text-white/60 px-3 sm:px-4 text-sm sm:text-base">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+                  <div className="space-y-1.5 mb-4 text-sm">
+                    {t.location && (
+                      <div className="flex items-center gap-2 text-white/60">
+                        <MapPin className="w-4 h-4 text-[#D4AF6A] shrink-0" />
+                        <span className="truncate">{t.location}</span>
+                      </div>
+                    )}
+                    {t.start_date && (
+                      <div className="flex items-center gap-2 text-white/60">
+                        <Calendar className="w-4 h-4 text-[#D4AF6A] shrink-0" />
+                        <span>{new Date(t.start_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-white/60">
+                      <Users className="w-4 h-4 text-[#D4AF6A] shrink-0" />
+                      <span>{t.registered_teams_count}/{t.required_teams} teams</span>
+                    </div>
+                  </div>
+
+                  {/* Actions — View details + Request to join (side by side) */}
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/tournaments/${t.id}`}
+                      className="inline-flex items-center justify-center gap-1 rounded-md border border-white/20 text-white/80 px-3 py-2 text-xs font-medium hover:bg-white/5 transition flex-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View details
+                    </Link>
+                    {open && (
+                      <button
+                        onClick={() => handleRequestToJoin(t)}
+                        className="inline-flex items-center justify-center gap-1 rounded-md bg-[#D4AF6A] text-[#1C1928] px-3 py-2 text-xs font-medium hover:bg-[#D4AF6A]/90 transition flex-1"
+                      >
+                        Request to join
+                      </button>
+                    )}
+                  </div>
+
+                  {mine && (
+                    <Link
+                      href={`/dashboard/organizer/${t.id}`}
+                      className="mt-2 block rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-4 py-2 text-xs text-center font-medium hover:bg-[#D4AF6A]/10 transition"
+                    >
+                      Manage tournament
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-
       <Footer />
+
+      {pendingTournament && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
+          onClick={() => setPendingTournament(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#242030] p-6 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white font-semibold text-lg mb-1">Request to join</h3>
+            <p className="text-white/60 text-sm mb-1">{pendingTournament.tournament_name}</p>
+            <p className="text-white/40 text-xs mb-4">
+              Min {pendingTournament.min_players_per_team} players · Max{" "}
+              {pendingTournament.max_players_per_team} ·{" "}
+              {pendingTournament.registered_teams_count}/{pendingTournament.required_teams} teams so far
+            </p>
+
+            {myTeams.length === 0 ? (
+              <div className="rounded-lg border border-white/10 bg-[#1C1928] p-4 text-sm text-white/60 text-center">
+                You don't captain any teams. Create a team first.
+                <div className="mt-3">
+                  <Link
+                    href="/teams/create"
+                    className="inline-flex items-center gap-1 rounded-md bg-[#D4AF6A] text-[#1C1928] px-4 py-2 text-xs font-medium hover:bg-[#D4AF6A]/90"
+                  >
+                    <Plus className="w-3 h-3" /> Create team
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {myTeams.map((team) => {
+                  const meetsMin = team.member_count >= pendingTournament.min_players_per_team;
+                  return (
+                    <button
+                      key={team.id}
+                      onClick={() => meetsMin && handlePickTeam(team)}
+                      disabled={!meetsMin || requesting === team.id}
+                      className={`w-full flex items-center gap-3 rounded-lg border p-3 transition text-left ${
+                        meetsMin
+                          ? "border-white/10 bg-[#1C1928] hover:border-[#D4AF6A]/50 cursor-pointer"
+                          : "border-yellow-500/20 bg-yellow-500/5 cursor-not-allowed"
+                      } disabled:opacity-60`}
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] shrink-0 overflow-hidden">
+                        {team.logo_url ? (
+                          <Image src={team.logo_url} alt={team.name} width={40} height={40} className="object-cover" />
+                        ) : (
+                          <Shield className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{team.name}</p>
+                        <p className={`text-xs ${meetsMin ? "text-white/50" : "text-yellow-400"}`}>
+                          {team.member_count} player{team.member_count !== 1 ? "s" : ""}
+                          {!meetsMin && ` · needs ${pendingTournament.min_players_per_team - team.member_count} more`}
+                        </p>
+                      </div>
+                      {requesting === team.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-[#D4AF6A]" />
+                      ) : meetsMin ? (
+                        <ArrowRight className="w-4 h-4 text-[#D4AF6A]" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-yellow-400" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={() => setPendingTournament(null)}
+              className="mt-4 w-full rounded-md border border-white/20 text-white px-4 py-2 text-sm hover:bg-white/5"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ThemedAlert state={alert} onClose={() => setAlert(null)} />
     </div>
   );
 }

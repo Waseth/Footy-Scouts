@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [myTeamsCount, setMyTeamsCount] = useState(null);
   const [invitationsCount, setInvitationsCount] = useState(0);
+  const [myTournamentsCount, setMyTournamentsCount] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,9 +56,11 @@ export default function DashboardPage() {
         Promise.allSettled([
           api.getMyTeams({ per_page: 1 }),
           api.getMyPlayerInvitations({ per_page: 1 }),
-        ]).then(([teamsRes, invRes]) => {
+          api.getMyTournaments({ per_page: 1 }),
+        ]).then(([teamsRes, invRes, tourRes]) => {
           if (teamsRes.status === "fulfilled") setMyTeamsCount(teamsRes.value.total || 0);
           if (invRes.status === "fulfilled") setInvitationsCount(invRes.value.total || 0);
+          if (tourRes.status === "fulfilled") setMyTournamentsCount(tourRes.value.total || 0);
         });
 
         if (userData.role === "ADMIN") {
@@ -119,8 +122,18 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {isPlayer && (
             <>
-              <ActionCard href="/dashboard/profile" icon={User} title="My Profile" subtitle="View and edit your player profile" />
-              <ActionCard href="/dashboard/media" icon={ImageIcon} title="Highlights" subtitle="Upload images, videos, and PDFs" />
+              <ActionCard
+                href="/dashboard/profile"
+                icon={User}
+                title="My Profile"
+                subtitle="View and edit your player profile"
+              />
+              <ActionCard
+                href="/dashboard/media"
+                icon={ImageIcon}
+                title="Highlights"
+                subtitle="Upload images, videos, and PDFs"
+              />
               <ActionCard
                 href="/dashboard/teams"
                 icon={Shield}
@@ -139,14 +152,40 @@ export default function DashboardPage() {
                 subtitle="Team invites and requests"
                 badge={invitationsCount}
               />
-              <ActionCard href="/tournaments" icon={Calendar} title="Tournaments" subtitle="Browse and register for tournaments" />
+              <ActionCard
+                href="/tournaments"
+                icon={Calendar}
+                title="Tournaments"
+                subtitle="Browse and register for tournaments"
+              />
+              <ActionCard
+                href="/dashboard/organizer"
+                icon={Trophy}
+                title="My Tournaments"
+                subtitle={
+                  myTournamentsCount === null
+                    ? "Organize and manage tournaments"
+                    : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`
+                }
+                badge={myTournamentsCount}
+              />
             </>
           )}
 
           {isScout && (
             <>
-              <ActionCard href="/dashboard/profile" icon={User} title="My Profile" subtitle="View and edit your scout profile" />
-              <ActionCard href="/players" icon={Users} title="Find Players" subtitle="Search for talented players" />
+              <ActionCard
+                href="/dashboard/profile"
+                icon={User}
+                title="My Profile"
+                subtitle="View and edit your scout profile"
+              />
+              <ActionCard
+                href="/players"
+                icon={Users}
+                title="Find Players"
+                subtitle="Search for talented players"
+              />
               <ActionCard
                 href="/dashboard/teams"
                 icon={Shield}
@@ -154,12 +193,33 @@ export default function DashboardPage() {
                 subtitle="Teams you captain or join"
                 badge={myTeamsCount}
               />
-              <ActionCard href="/tournaments" icon={Trophy} title="Tournaments" subtitle="Discover talent at tournaments" />
+              <ActionCard
+                href="/tournaments"
+                icon={Trophy}
+                title="Tournaments"
+                subtitle="Discover talent at tournaments"
+              />
+              <ActionCard
+                href="/dashboard/organizer"
+                icon={Trophy}
+                title="My Tournaments"
+                subtitle={
+                  myTournamentsCount === null
+                    ? "Organize and manage tournaments"
+                    : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`
+                }
+                badge={myTournamentsCount}
+              />
             </>
           )}
 
           {isAdmin && (
-            <ActionCard href="/admin" icon={Settings} title="Admin Panel" subtitle="Manage users, approvals, and content" />
+            <ActionCard
+              href="/admin"
+              icon={Settings}
+              title="Admin Panel"
+              subtitle="Manage users, approvals, and content"
+            />
           )}
         </div>
 
@@ -175,9 +235,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-
-
-                {!isAdmin && (
+        {!isAdmin && (
           <div className="mb-8 flex flex-wrap gap-3">
             <Link
               href="/dashboard/subscription"
@@ -196,7 +254,10 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <button onClick={handleLogout} className="flex items-center gap-2 text-white/60 hover:text-white transition-colors">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+        >
           <LogOut className="w-5 h-5" />
           Logout
         </button>

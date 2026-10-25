@@ -114,7 +114,7 @@ export default function FAQ() {
             href="/contact"
             className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
           >
-            Contact us →
+            Contact us
           </a>
         </div>
       </div>

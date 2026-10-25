@@ -3,26 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle2,
-  ArrowRight,
-  Flag,
-  Calendar,
-  Shirt,
-  ChevronLeft,
-  ChevronRight,
+  CheckCircle2, ArrowRight, Flag, Calendar, Shirt,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import Image from "next/image";
 import CustomSelect from "@/components/CustomSelect";
 
 const POSITIONS = [
-  "Goalkeeper",
-  "Centre-back",
-  "Full-back",
-  "Defensive Midfielder",
-  "Central Midfielder",
-  "Attacking Midfielder",
-  "Winger",
-  "Striker",
+  "Goalkeeper", "Centre-back", "Full-back", "Defensive Midfielder",
+  "Central Midfielder", "Attacking Midfielder", "Winger", "Striker",
 ];
 
 const POSITION_OPTIONS = POSITIONS.map((pos) => ({ value: pos, label: pos }));
@@ -50,7 +39,6 @@ const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - MIN_BIRTH_YEAR + 1 }, (
 });
 const MONTH_OPTIONS = MONTH_NAMES.map((name, i) => ({ value: String(i), label: name }));
 
-/* ---------- Themed date picker ---------- */
 function ThemedDatePicker({ id, value, onChange }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -63,7 +51,6 @@ function ThemedDatePicker({ id, value, onChange }) {
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
-
   const firstOfMonth = new Date(year, month, 1);
   const startWeekday = firstOfMonth.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -90,17 +77,9 @@ function ThemedDatePicker({ id, value, onChange }) {
     setOpen(false);
   };
 
-  const changeMonth = (delta) => {
-    setViewDate(new Date(year, month + delta, 1));
-  };
-
-  const handleMonthSelect = (monthValue) => {
-    setViewDate(new Date(year, Number(monthValue), 1));
-  };
-
-  const handleYearSelect = (yearValue) => {
-    setViewDate(new Date(Number(yearValue), month, 1));
-  };
+  const changeMonth = (delta) => setViewDate(new Date(year, month + delta, 1));
+  const handleMonthSelect = (mv) => setViewDate(new Date(year, Number(mv), 1));
+  const handleYearSelect = (yv) => setViewDate(new Date(Number(yv), month, 1));
 
   const isSelected = (day) =>
     selectedDate &&
@@ -114,7 +93,7 @@ function ThemedDatePicker({ id, value, onChange }) {
         type="button"
         id={id}
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex w-full items-center rounded-lg border py-2 sm:py-2.5 pl-10 pr-3 text-left text-sm sm:text-base outline-none transition ${
+        className={`flex w-full items-center rounded-lg border py-2.5 pl-10 pr-3 text-left text-sm outline-none transition ${
           open ? "border-[#D4AF6A]/60" : "border-white/10 hover:border-white/20"
         } bg-[#1C1928]`}
       >
@@ -135,7 +114,6 @@ function ThemedDatePicker({ id, value, onChange }) {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-
             <CustomSelect
               value={String(month)}
               onChange={handleMonthSelect}
@@ -148,7 +126,6 @@ function ThemedDatePicker({ id, value, onChange }) {
               options={YEAR_OPTIONS}
               className="flex-1"
             />
-
             <button
               type="button"
               onClick={() => changeMonth(1)}
@@ -200,6 +177,7 @@ export default function PlayerOnboarding() {
   const [progress, setProgress] = useState(50);
   const [animate, setAnimate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -209,6 +187,7 @@ export default function PlayerOnboarding() {
   const handleInputChange = (e) => {
     const { id, value } = e.target;
     setFormData((prev) => ({ ...prev, [id]: value }));
+    setError("");
   };
 
   const isFormValid = formData.nationality && formData.dateOfBirth && formData.position;
@@ -217,6 +196,7 @@ export default function PlayerOnboarding() {
     if (!isFormValid) return;
     setSubmitting(true);
     setProgress(80);
+    setError("");
 
     const token =
       typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -234,63 +214,47 @@ export default function PlayerOnboarding() {
     };
 
     try {
-      // Try to update existing profile
-      let res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/players/profile`,
-        {
-          method: "PUT",
-          headers: authHeaders,
-          body: JSON.stringify(payload),
-        }
-      );
+      let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/players/profile`, {
+        method: "PUT",
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      });
 
-      // If profile doesn't exist, create it
       if (res.status === 404) {
-        res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/players/profile`,
-          {
-            method: "POST",
-            headers: authHeaders,
-            body: JSON.stringify({
-              full_name: "New Player",
-              ...payload,
-            }),
-          }
-        );
+        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/players/profile`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ full_name: "New Player", ...payload }),
+        });
       }
 
       if (!res.ok) {
-        const body = await res.text();
-        console.error("Save profile failed:", res.status, body);
-
-        if (res.status === 401) {
-          router.push("/login");
-          return;
-        }
-
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Could not save profile");
         setSubmitting(false);
         return;
       }
 
       setProgress(100);
       setTimeout(() => router.push("/dashboard"), 400);
-    } catch (error) {
-      console.error("Error updating player profile:", error);
+    } catch (err) {
+      setError(err.message || "Something went wrong");
       setSubmitting(false);
     }
   };
 
   return (
     <div className="flex min-h-screen flex-col overflow-hidden md:flex-row">
-      {/* Left — brand panel */}
       <div className="relative flex w-full items-center justify-center overflow-hidden bg-[#1C1928] p-8 md:w-1/2 md:p-0">
         <div
-          className={`absolute left-[20%] top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${animate ? "scale-110" : "scale-100"
-            }`}
+          className={`absolute left-[20%] top-[20%] h-[70%] w-[70%] rounded-full bg-[#D4AF6A]/10 transition-all duration-1000 ease-in-out ${
+            animate ? "scale-110" : "scale-100"
+          }`}
         />
         <div
-          className={`absolute bottom-[10%] right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${animate ? "scale-125" : "scale-100"
-            }`}
+          className={`absolute bottom-[10%] right-[10%] h-[60%] w-[60%] rounded-full bg-[#D4AF6A]/5 transition-all delay-300 duration-1000 ease-in-out ${
+            animate ? "scale-125" : "scale-100"
+          }`}
         />
         <div className="relative z-10 max-w-md text-center text-white md:text-left">
           <h1 className="mb-6 text-4xl font-bold md:text-5xl">
@@ -316,12 +280,17 @@ export default function PlayerOnboarding() {
         </div>
       </div>
 
-      {/* Right — form */}
       <div className="flex w-full items-center justify-center bg-[#242030] p-8 md:w-1/2 md:p-16">
         <div className="w-full max-w-md">
           <div className="mb-10 text-center">
-            <Image src="/logo-modified.png" loading="eager" alt="logo" className="mx-auto mb-3 h-auto w-auto" width={100} height={50} />
-
+            <Image
+              src="/logo-modified.png"
+              loading="eager"
+              alt="logo"
+              className="mx-auto mb-3 h-auto w-auto"
+              width={100}
+              height={50}
+            />
             <h2 className="text-2xl font-bold text-white">Footy Scouts</h2>
             <p className="mt-1 text-sm text-white/50">Your football recruitment network</p>
           </div>
@@ -340,6 +309,12 @@ export default function PlayerOnboarding() {
           </div>
 
           <h3 className="mb-8 text-2xl font-bold text-white">Tell us about your game</h3>
+
+          {error && (
+            <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
 
           <div className="mb-10 space-y-6">
             <div className="space-y-2">
@@ -404,10 +379,11 @@ export default function PlayerOnboarding() {
           </div>
 
           <button
-            className={`flex w-full items-center justify-center rounded-md py-4 text-base font-medium transition-all duration-300 ${isFormValid
-                ? "cursor-pointer bg-white text-[#1C1928] hover:bg-white/90"
+            className={`flex w-full items-center justify-center rounded-md py-4 text-base font-medium transition-all duration-300 ${
+              isFormValid && !submitting
+                ? "cursor-pointer bg-[#D4AF6A] text-[#1C1928] hover:bg-[#c9a45f]"
                 : "cursor-not-allowed bg-white/10 text-white/30"
-              }`}
+            }`}
             onClick={handleContinue}
             disabled={!isFormValid || submitting}
           >
