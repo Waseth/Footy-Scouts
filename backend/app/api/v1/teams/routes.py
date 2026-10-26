@@ -181,6 +181,42 @@ def get_team(team_id):
             for t in tournament_invs
         ]
 
+        # 🆕 All entries for this team (ACCEPTED / REGISTERED / WITHDRAWN etc.)
+        #    This is what powers the "Pay entry fee" card on the manage page.
+        all_entries = (
+            TournamentTeam.query
+            .filter_by(team_id=team.id)
+            .order_by(TournamentTeam.created_at.desc())
+            .all()
+        )
+        squad_size = team.active_members_count()
+        data['tournament_entries'] = []
+        for e in all_entries:
+            t = e.tournament
+            min_p = t.min_players_per_team if t else 0
+            max_p = t.max_players_per_team if t else 0
+            can_pay = (
+                e.status == TournamentTeam.STATUS_ACCEPTED
+                and t is not None
+                and squad_size >= min_p
+                and squad_size <= max_p
+            )
+            data['tournament_entries'].append({
+                'id': e.id,
+                'tournament_id': e.tournament_id,
+                'tournament_name': t.tournament_name if t else None,
+                'tournament_type': t.tournament_type if t else None,
+                'status': e.status,
+                'team_entry_fee': float(t.team_entry_fee) if t else 0,
+                'platform_fee_per_team': float(t.platform_fee_per_team) if t else 0,
+                'fee_currency': t.fee_currency if t else 'KES',
+                'min_players_per_team': min_p,
+                'max_players_per_team': max_p,
+                'registered_at': e.registered_at.isoformat() if e.registered_at else None,
+                'entry_payment_id': e.entry_payment_id,
+                'can_pay': can_pay,
+            })
+
     return success_response(data=data)
 
 
@@ -450,11 +486,6 @@ def list_join_requests(team_id):
 @teams_bp.route('/<team_id>/join-requests/<request_id>/accept', methods=['POST'])
 @jwt_required()
 def accept_join_request(team_id, request_id):
-    """
-    Captain accepts a player's request to join the team.
-    If the team is already ACCEPTED or REGISTERED in a tournament,
-    check that the player isn't in another overlapping tournament.
-    """
     user = get_current_user()
     team = db.session.get(Team, team_id)
     if not team:
@@ -482,9 +513,6 @@ def accept_join_request(team_id, request_id):
         db.session.commit()
         return error_response("Player is already on the team", 409)
 
-    # 🆕 Tournament overlap check
-    # If this team is in a tournament (ACCEPTED or REGISTERED), ensure the
-    # player isn't already on another team in an overlapping tournament.
     active_entries = TournamentTeam.query.filter(
         TournamentTeam.team_id == team.id,
         TournamentTeam.status.in_([
@@ -561,10 +589,6 @@ def reject_join_request(team_id, request_id):
 @jwt_required()
 @limiter.limit("20 per hour")
 def request_join(team_id):
-    """
-    Player requests to join a team.
-    If the team is already in a tournament, check overlap first.
-    """
     user = get_current_user()
     _, err = _ensure_player_profile(user)
     if err:
@@ -588,7 +612,6 @@ def request_join(team_id):
     if pending:
         return error_response("You already have a pending request for this team", 409)
 
-    # 🆕 If team is already in a tournament, check overlap before accepting request
     active_entries = TournamentTeam.query.filter(
         TournamentTeam.team_id == team.id,
         TournamentTeam.status.in_([
@@ -685,15 +708,6 @@ def search_players():
 @jwt_required()
 @limiter.limit("20 per hour")
 def request_tournament(team_id):
-    """
-    Captain requests to enter their team into a tournament.
-    Checks:
-      1. Registration is open
-      2. Team not already in this tournament
-      3. Team meets min players
-      4. No squad member is in another overlapping tournament
-      5. Tournament not full
-    """
     from ....models import Tournament
 
     user = get_current_user()
@@ -731,7 +745,6 @@ def request_tournament(team_id):
             409,
         )
 
-    # Squad capacity
     member_count = team.active_members_count()
     if member_count < tournament.min_players_per_team:
         return error_response(
@@ -746,7 +759,6 @@ def request_tournament(team_id):
             },
         )
 
-    # 🆕 Tournament overlap check
     conflict = find_team_conflict(team, tournament)
     if conflict:
         player_id, conflicting_t = conflict
@@ -769,7 +781,6 @@ def request_tournament(team_id):
             },
         )
 
-    # Slot availability
     occupied = TournamentTeam.query.filter(
         TournamentTeam.tournament_id == tournament.id,
         TournamentTeam.status.in_([
@@ -818,14 +829,6 @@ def request_tournament(team_id):
 @teams_bp.route('/<team_id>/invitations/<entry_id>/accept', methods=['POST'])
 @jwt_required()
 def accept_tournament_invite(team_id, entry_id):
-    """
-    Captain accepts an INVITED tournament entry → ACCEPTED.
-    Checks:
-      1. Entry status is INVITED
-      2. Squad meets min players
-      3. No squad member is in another overlapping tournament
-      4. Tournament not full
-    """
     from ....models import Tournament
 
     user = get_current_user()
@@ -850,7 +853,6 @@ def accept_tournament_invite(team_id, entry_id):
     if not tournament:
         return error_response("Tournament not found", 404)
 
-    # Squad capacity
     member_count = team.active_members_count()
     if member_count < tournament.min_players_per_team:
         return error_response(
@@ -865,7 +867,6 @@ def accept_tournament_invite(team_id, entry_id):
             },
         )
 
-    # 🆕 Tournament overlap check
     conflict = find_team_conflict(team, tournament)
     if conflict:
         player_id, conflicting_t = conflict
@@ -888,7 +889,6 @@ def accept_tournament_invite(team_id, entry_id):
             },
         )
 
-    # Tournament capacity
     occupied = TournamentTeam.query.filter(
         TournamentTeam.tournament_id == tournament.id,
         TournamentTeam.status.in_([

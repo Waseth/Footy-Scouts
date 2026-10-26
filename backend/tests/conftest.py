@@ -40,7 +40,6 @@ def _clean_db(app):
     with app.app_context():
         _db.session.remove()
 
-        # Wipe everything except 'roles'
         for table in reversed(_db.metadata.sorted_tables):
             if table.name == 'roles':
                 continue
@@ -50,7 +49,6 @@ def _clean_db(app):
                 _db.session.rollback()
         _db.session.commit()
 
-        # Ensure roles exist
         _seed_roles()
 
     yield
@@ -121,7 +119,93 @@ def admin_token(client, admin_user):
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Helpers
+#  Team + tournament fixtures
+# ─────────────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def captain_user(app):
+    """A player user who will captain a team."""
+    return _make_user('captain@test.com', 'CaptainPass1!', 'PLAYER')
+
+
+@pytest.fixture()
+def captain_token(client, captain_user):
+    return _login_token(client, 'captain@test.com', 'CaptainPass1!')
+
+
+@pytest.fixture()
+def team(app, captain_user):
+    """A team with 1 active member (captain)."""
+    from app.models import Team, TeamMember
+    with app.app_context():
+        t = Team(captain_user_id=captain_user.id, name="Test Lions")
+        _db.session.add(t)
+        _db.session.flush()
+        _db.session.add(TeamMember(team_id=t.id, user_id=captain_user.id,
+                                    status=TeamMember.STATUS_ACTIVE))
+        _db.session.commit()
+        return t
+
+
+@pytest.fixture()
+def tournament_open(app, admin_user):
+    """A published tournament with a fee, empty slots, registration open."""
+    from app.models import Tournament
+    from datetime import datetime, timezone, timedelta
+    with app.app_context():
+        t = Tournament(
+            organizer_user_id=admin_user.id,
+            organization_name="Test Org",
+            representative_name="Rep",
+            tournament_name="Test Cup",
+            tournament_type="7-a-side",
+            location="Nairobi",
+            required_teams=4,
+            min_players_per_team=5,
+            max_players_per_team=8,
+            team_entry_fee=2000,
+            platform_fee_per_team=100,
+            tournament_fee_total=8000,
+            total_required_from_teams=8400,
+            fee_currency='KES',
+            start_date=datetime.now(timezone.utc) + timedelta(days=30),
+            end_date=datetime.now(timezone.utc) + timedelta(days=31),
+            status=Tournament.ST_FILLING_TEAMS,
+            is_approved=True,
+        )
+        _db.session.add(t)
+        _db.session.commit()
+        return t
+
+
+@pytest.fixture()
+def accepted_entry(app, team, tournament_open):
+    """
+    A team ACCEPTED into the tournament, squad padded to exactly
+    min_players_per_team (5). Team has 1 (captain) + 4 fillers = 5.
+    """
+    from app.models import TournamentTeam
+    _make_squad(team.id, 4)
+    with app.app_context():
+        entry = TournamentTeam(
+            tournament_id=tournament_open.id,
+            team_id=team.id,
+            status=TournamentTeam.STATUS_ACCEPTED,
+        )
+        _db.session.add(entry)
+        _db.session.commit()
+        return entry
+
+
+@pytest.fixture()
+def overstaffed_team(app, team):
+    """Team with 1 (captain) + 8 fillers = 9 active members (over max=8)."""
+    _make_squad(team.id, 8, prefix="over")
+    return team
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Helpers (also usable from tests: `from tests.conftest import _make_squad`)
 # ─────────────────────────────────────────────────────────────────
 
 def _seed_roles():
@@ -156,3 +240,26 @@ def _login_token(client, email, password):
     )
     data = resp.get_json()
     return data['data']['access_token']
+
+
+def _make_squad(team_id, n_extra, prefix="p"):
+    """Add n_extra filler players to a team. Returns the list of users."""
+    from app.models import Role, User, TeamMember, Player, Subscription
+    role = Role.query.filter_by(name='PLAYER').first()
+    users = []
+    for i in range(n_extra):
+        email = f"{prefix}{i}@test.com"
+        if User.query.filter_by(email=email).first():
+            continue
+        u = User(email=email, role_id=role.id, is_active=True,
+                 is_verified=True, is_approved=True)
+        u.set_password('Pass1234!')
+        _db.session.add(u)
+        _db.session.flush()
+        _db.session.add(Subscription(user_id=u.id, plan='FREE'))
+        _db.session.add(Player(user_id=u.id, full_name=f"{prefix.title()} {i}"))
+        _db.session.add(TeamMember(team_id=team_id, user_id=u.id,
+                                    status=TeamMember.STATUS_ACTIVE))
+        users.append(u)
+    _db.session.commit()
+    return users

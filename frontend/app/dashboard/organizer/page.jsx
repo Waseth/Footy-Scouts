@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Plus, Loader2, Trophy, Settings, AlertCircle, Calendar,
-  MapPin, Users,
+  MapPin, Users, CreditCard,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -61,9 +61,7 @@ export default function MyTournamentsPage() {
         <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white">My Tournaments</h1>
-            <p className="text-white/60 mt-1">
-              Tournaments you organize
-            </p>
+            <p className="text-white/60 mt-1">Tournaments you organize</p>
           </div>
           <Link
             href="/tournaments/create"
@@ -96,45 +94,66 @@ export default function MyTournamentsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {tournaments.map((t) => (
-              <Link
-                key={t.id}
-                href={`/dashboard/organizer/${t.id}`}
-                className="block rounded-xl border border-white/10 bg-[#242030] p-5 hover:border-[#D4AF6A]/50 transition group"
-              >
-                <div className="flex items-start justify-between flex-wrap gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${STATUS_COLORS[t.status] || STATUS_COLORS.DRAFT}`}>
-                        {t.status.replace(/_/g, " ")}
-                      </span>
-                      <span className="text-xs text-white/40">{t.tournament_type}</span>
-                    </div>
-                    <h3 className="text-white font-semibold text-lg group-hover:text-[#D4AF6A] transition">
-                      {t.tournament_name}
-                    </h3>
-                    <div className="flex flex-wrap gap-3 mt-2 text-sm text-white/50">
-                      {t.location && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5" /> {t.location}
+            {tournaments.map((t) => {
+              const isPaid = t.status === "REGISTRATION_CLOSED" || t.status === "IN_PROGRESS" || t.status === "COMPLETED";
+              return (
+                <Link
+                  key={t.id}
+                  href={`/dashboard/organizer/${t.id}`}
+                  className="block rounded-xl border border-white/10 bg-[#242030] p-5 hover:border-[#D4AF6A]/50 transition group"
+                >
+                  <div className="flex items-start justify-between flex-wrap gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
+                            STATUS_COLORS[t.status] || STATUS_COLORS.DRAFT
+                          }`}
+                        >
+                          {t.status.replace(/_/g, " ")}
                         </span>
-                      )}
-                      {t.start_date && (
+                        <span className="text-xs text-white/40">{t.tournament_type}</span>
+                        {isPaid && t.payout_code && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#D4AF6A]/20 text-[#D4AF6A] inline-flex items-center gap-1">
+                            <CreditCard className="w-2.5 h-2.5" />
+                            {t.payout_status || "PENDING"}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-white font-semibold text-lg group-hover:text-[#D4AF6A] transition">
+                        {t.tournament_name}
+                      </h3>
+                      <div className="flex flex-wrap gap-3 mt-2 text-sm text-white/50">
+                        {t.location && (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5" /> {t.location}
+                          </span>
+                        )}
+                        {t.start_date && (
+                          <span className="inline-flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(t.start_date).toLocaleDateString()}
+                          </span>
+                        )}
                         <span className="inline-flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
-                          {new Date(t.start_date).toLocaleDateString()}
+                          <Users className="w-3.5 h-3.5" />
+                          {t.registered_teams_count}/{t.required_teams} teams
+                          {t.accepted_teams_count > 0 && (
+                            <>
+                              {" · "}
+                              <span className="text-blue-400">
+                                {t.accepted_teams_count} unpaid
+                              </span>
+                            </>
+                          )}
                         </span>
-                      )}
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" />
-                        {t.registered_teams_count}/{t.required_teams} teams
-                      </span>
+                      </div>
                     </div>
+                    <Settings className="w-5 h-5 text-white/30 group-hover:text-[#D4AF6A] transition" />
                   </div>
-                  <Settings className="w-5 h-5 text-white/30 group-hover:text-[#D4AF6A] transition" />
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

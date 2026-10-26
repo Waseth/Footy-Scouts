@@ -284,7 +284,6 @@ class ApiService {
     return result.data;
   }
 
-  // ── Tournament organizer ──
   async createTournament(data) {
     const result = await this.request("/tournaments", {
       method: "POST",
@@ -449,8 +448,9 @@ class ApiService {
     return result.data;
   }
 
-  async getPaymentHistory() {
-    const result = await this.request("/payments/history");
+  async getPaymentHistory(purpose) {
+    const query = purpose ? `?purpose=${encodeURIComponent(purpose)}` : "";
+    const result = await this.request(`/payments/history${query}`);
     return result.data.payments;
   }
 
@@ -460,17 +460,6 @@ class ApiService {
       {
         method: "POST",
         body: JSON.stringify({ team_id: teamId, tournament_id: tournamentId }),
-      }
-    );
-    return result.data;
-  }
-
-  async initializeTournamentFinalPayment(tournamentId) {
-    const result = await this.request(
-      "/payments/paystack/initialize/tournament-final",
-      {
-        method: "POST",
-        body: JSON.stringify({ tournament_id: tournamentId }),
       }
     );
     return result.data;
@@ -674,15 +663,103 @@ class ApiService {
     const query = new URLSearchParams();
     if (params.role) query.append("role", params.role);
     if (params.status) query.append("status", params.status);
+    if (params.search) query.append("search", params.search);
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
     const result = await this.request(`/admin/users?${query.toString()}`);
     return result.data;
   }
 
+  async suspendUser(userId, reason = "") {
+    return this.request(`/admin/users/${userId}/suspend`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async unsuspendUser(userId) {
+    return this.request(`/admin/users/${userId}/unsuspend`, {
+      method: "POST",
+    });
+  }
+
+  async deleteUser(userId, reason = "") {
+    return this.request(`/admin/users/${userId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async promoteUser(userId) {
+    const result = await this.request(`/admin/users/${userId}/promote`, {
+      method: "POST",
+    });
+    return result.data.user;
+  }
+
+  async getPayouts(status) {
+    const query = new URLSearchParams();
+    if (status) query.append("status", status);
+    const result = await this.request(`/admin/payouts?${query.toString()}`);
+    return result.data;
+  }
+
+  async markPayoutPaid(payoutId, { payment_method, transaction_reference, notes }) {
+    const result = await this.request(
+      `/admin/payouts/${payoutId}/mark-paid`,
+      {
+        method: "POST",
+        body: JSON.stringify({ payment_method, transaction_reference, notes }),
+      }
+    );
+    return result.data.payout;
+  }
+
+  async markPayoutFailed(payoutId, { notes }) {
+    const result = await this.request(
+      `/admin/payouts/${payoutId}/mark-failed`,
+      {
+        method: "POST",
+        body: JSON.stringify({ notes }),
+      }
+    );
+    return result.data.payout;
+  }
+
+  async getAdminPayments(params = {}) {
+    const query = new URLSearchParams();
+    if (params.status) query.append("status", params.status);
+    if (params.purpose) query.append("purpose", params.purpose);
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/admin/payments?${query.toString()}`);
+    return result.data;
+  }
+
+  async refundPayment(paymentId, { reason, transaction_reference }) {
+    const result = await this.request(
+      `/admin/payments/${paymentId}/refund`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason, transaction_reference }),
+      }
+    );
+    return result.data.payment;
+  }
+
   isAuthenticated() {
     if (typeof window === "undefined") return false;
     return !!localStorage.getItem("access_token");
+  }
+
+  isAdmin() {
+    if (typeof window === "undefined") return false;
+    try {
+      const u = JSON.parse(localStorage.getItem("user") || "{}");
+      return u.role === "ADMIN";
+    } catch {
+      return false;
+    }
   }
 }
 

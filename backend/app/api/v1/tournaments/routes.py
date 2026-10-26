@@ -8,7 +8,7 @@ from ....extensions import db, limiter
 from ....models import (
     Tournament, TournamentTeam, Team, TeamMember,
     PlayerInvitation, PlayerJoinRequest, User, OrganizerProfile,
-    OrganizerPayout, Notification,
+    OrganizerPayout, Notification, Payment,
 )
 from ....services.notification_service import NotificationService
 from ....utils.decorators import get_current_user, get_optional_viewer
@@ -33,7 +33,6 @@ def _generate_payout_code(prefix='PAYOUT'):
 
 
 def _ensure_organizer_profile(user):
-    """Create OrganizerProfile on first tournament creation."""
     if user.organizer_profile:
         return user.organizer_profile
     org = OrganizerProfile(
@@ -47,21 +46,18 @@ def _ensure_organizer_profile(user):
 
 
 def _require_organizer(tournament, user):
-    """Return error response if user is not the organizer."""
     if tournament.organizer_user_id != user.id and not user.is_admin():
         return error_response("Only the organizer can manage this tournament", 403)
     return None
 
 
 def _parse_date(raw):
-    """Parse YYYY-MM-DD or ISO string to datetime or None."""
     if not raw:
         return None
     if isinstance(raw, datetime):
         return raw
     if isinstance(raw, str):
         raw = raw.replace('Z', '+00:00')
-        # Try full ISO
         try:
             dt = datetime.fromisoformat(raw)
             if dt.tzinfo is None:
@@ -69,7 +65,6 @@ def _parse_date(raw):
             return dt
         except ValueError:
             pass
-        # Try YYYY-MM-DD
         try:
             dt = datetime.strptime(raw.split('T')[0], '%Y-%m-%d')
             return dt.replace(tzinfo=timezone.utc)
@@ -78,13 +73,53 @@ def _parse_date(raw):
     return None
 
 
+def _serialize_entry(entry, include_payment=False):
+    """
+    Serialize a TournamentTeam for the organizer/admin view.
+    When include_payment=True, embed the linked Payment's key fields.
+    """
+    team = entry.team
+    data = {
+        'id': entry.id,
+        'tournament_id': entry.tournament_id,
+        'team_id': entry.team_id,
+        'status': entry.status,
+        'invited_by_organizer': entry.invited_by_organizer,
+        'message': entry.message,
+        'created_at': entry.created_at.isoformat() if entry.created_at else None,
+        'responded_at': entry.responded_at.isoformat() if entry.responded_at else None,
+        'registered_at': entry.registered_at.isoformat() if entry.registered_at else None,
+        'entry_payment_id': entry.entry_payment_id,
+        'team': {
+            'id': team.id,
+            'name': team.name,
+            'logo_url': team.logo_url,
+            'member_count': team.active_members_count() if team else 0,
+            'captain_user_id': team.captain_user_id if team else None,
+            'captain_email': team.captain.email if team and team.captain else None,
+        } if team else None,
+    }
+    if include_payment and entry.entry_payment_id:
+        p = db.session.get(Payment, entry.entry_payment_id)
+        if p:
+            data['payment'] = {
+                'id': p.id,
+                'amount': float(p.amount),
+                'currency': p.currency,
+                'status': p.status,
+                'channel': p.paystack_channel,
+                'reference': p.paystack_reference,
+                'completed_at': p.completed_at.isoformat() if p.completed_at else None,
+            }
+    return data
+
+
 # ─────────────────────────────────────────────────────────────
 #  Public browsing
 # ─────────────────────────────────────────────────────────────
 
 @tournaments_bp.route('', methods=['GET'])
 def list_tournaments():
-    """Public — list published tournaments (excludes DRAFT)."""
     query = Tournament.query.filter(
         Tournament.status != Tournament.ST_DRAFT,
     )
@@ -112,27 +147,71 @@ def list_tournaments():
 
 @tournaments_bp.route('/<tournament_id>', methods=['GET'])
 def get_tournament(tournament_id):
-    """Public — view tournament (draft only visible to organizer)."""
+    """Public — view tournament. Draft only visible to organizer/admin."""
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
         return error_response("Tournament not found", 404)
 
     viewer, is_authed = get_optional_viewer()
     is_owner = bool(viewer and viewer.id == tournament.organizer_user_id)
-    if tournament.status == Tournament.ST_DRAFT and not is_owner and not (viewer and viewer.is_admin()):
+    is_admin = bool(viewer and viewer.is_admin())
+    can_manage = is_owner or is_admin
+
+    if tournament.status == Tournament.ST_DRAFT and not can_manage:
         return error_response("Tournament not found", 404)
 
     data = {'tournament': tournament.to_dict()}
 
-    # Public team list (only REGISTERED teams shown to public)
-    if is_owner or (viewer and viewer.is_admin()):
-        entries = tournament.tournament_teams.order_by(TournamentTeam.created_at.desc()).all()
-        data['teams'] = [t.to_dict() for t in entries]
+    # Teams list — organizer/admin see every entry with payment details.
+    # Public/captains see only REGISTERED entries.
+    if can_manage:
+        entries = tournament.tournament_teams.order_by(
+            TournamentTeam.created_at.desc()
+        ).all()
+        data['teams'] = [_serialize_entry(e, include_payment=True) for e in entries]
     else:
         entries = tournament.tournament_teams.filter_by(
             status=TournamentTeam.STATUS_REGISTERED,
         ).all()
-        data['teams'] = [t.to_dict() for t in entries]
+        data['teams'] = [_serialize_entry(e, include_payment=False) for e in entries]
+
+    # Personal entry for captains of teams in this tournament
+    data['my_team_entry'] = None
+    if is_authed and viewer and not can_manage:
+        captain_team_ids = [
+            t.id for t in Team.query.filter_by(captain_user_id=viewer.id).all()
+        ]
+        if captain_team_ids:
+            my_entry = (
+                TournamentTeam.query
+                .filter(
+                    TournamentTeam.tournament_id == tournament.id,
+                    TournamentTeam.team_id.in_(captain_team_ids),
+                )
+                .first()
+            )
+            if my_entry:
+                squad = my_entry.team.active_members_count() if my_entry.team else 0
+                can_pay = (
+                    my_entry.status == TournamentTeam.STATUS_ACCEPTED
+                    and squad >= tournament.min_players_per_team
+                    and squad <= tournament.max_players_per_team
+                )
+                data['my_team_entry'] = {
+                    'id': my_entry.id,
+                    'team_id': my_entry.team_id,
+                    'team_name': my_entry.team.name if my_entry.team else None,
+                    'team_logo_url': my_entry.team.logo_url if my_entry.team else None,
+                    'status': my_entry.status,
+                    'squad_size': squad,
+                    'min_players_per_team': tournament.min_players_per_team,
+                    'max_players_per_team': tournament.max_players_per_team,
+                    'team_entry_fee': float(tournament.team_entry_fee or 0),
+                    'platform_fee_per_team': float(tournament.platform_fee_per_team or 0),
+                    'fee_currency': tournament.fee_currency or 'KES',
+                    'can_pay': can_pay,
+                    'registered_at': my_entry.registered_at.isoformat() if my_entry.registered_at else None,
+                }
 
     return success_response(data=data)
 
@@ -144,10 +223,6 @@ def get_tournament(tournament_id):
 @tournaments_bp.route('', methods=['POST'])
 @jwt_required()
 def create_tournament():
-    """
-    Create a tournament in DRAFT state.
-    Any authenticated user can create one — OrganizerProfile is auto-created.
-    """
     user = get_current_user()
     _ensure_organizer_profile(user)
 
@@ -168,7 +243,6 @@ def create_tournament():
             f"tournament_type must be one of: {', '.join(Tournament.TYPES)}", 400,
         )
 
-    # Validate numbers
     try:
         required_teams = int(data['required_teams'])
         min_players = int(data['min_players_per_team'])
@@ -184,7 +258,6 @@ def create_tournament():
     if team_entry_fee < 0:
         return error_response("team_entry_fee cannot be negative", 400)
 
-    # Compute fees
     commission_pct = _get_commission_percent()
     platform_fee_per_team = round(team_entry_fee * (commission_pct / 100.0), 2)
     tournament_fee_total = round(team_entry_fee * required_teams, 2)
@@ -236,7 +309,6 @@ def create_tournament():
 @tournaments_bp.route('/<tournament_id>', methods=['PUT'])
 @jwt_required()
 def update_tournament(tournament_id):
-    """Edit a tournament. Only in DRAFT status."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -254,7 +326,6 @@ def update_tournament(tournament_id):
 
     data = request.get_json() or {}
 
-    # Numeric fields that affect fee calculation
     try:
         if 'required_teams' in data:
             tournament.required_teams = int(data['required_teams'])
@@ -263,7 +334,6 @@ def update_tournament(tournament_id):
     except (ValueError, TypeError):
         return error_response("Invalid numeric values", 400)
 
-    # Recompute fees
     commission_pct = _get_commission_percent()
     tournament.platform_fee_per_team = round(
         float(tournament.team_entry_fee) * (commission_pct / 100.0), 2
@@ -276,7 +346,6 @@ def update_tournament(tournament_id):
         * tournament.required_teams, 2
     )
 
-    # String fields
     for field in [
         'tournament_name', 'tournament_type', 'location', 'description',
         'organization_name', 'representative_name', 'organization_phone',
@@ -285,7 +354,6 @@ def update_tournament(tournament_id):
         if field in data:
             setattr(tournament, field, data[field])
 
-    # Dates
     if 'start_date' in data:
         tournament.start_date = _parse_date(data['start_date'])
     if 'end_date' in data:
@@ -304,7 +372,6 @@ def update_tournament(tournament_id):
 @tournaments_bp.route('/<tournament_id>/publish', methods=['POST'])
 @jwt_required()
 def publish_tournament(tournament_id):
-    """Transition DRAFT → PUBLISHED → REGISTRATION_OPEN."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -322,8 +389,7 @@ def publish_tournament(tournament_id):
 
     tournament.status = Tournament.ST_PUBLISHED
     tournament.published_at = datetime.now(timezone.utc)
-    tournament.is_approved = True  # legacy flag
-    # Auto-transition to REGISTRATION_OPEN
+    tournament.is_approved = True
     tournament.status = Tournament.ST_REGISTRATION_OPEN
     db.session.commit()
 
@@ -340,10 +406,6 @@ def publish_tournament(tournament_id):
 @tournaments_bp.route('/<tournament_id>/cancel', methods=['POST'])
 @jwt_required()
 def cancel_tournament(tournament_id):
-    """
-    Cancel a tournament. If any teams are REGISTERED, mark for refund.
-    Refund happens via admin payout flow (Batch 5).
-    """
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -358,7 +420,6 @@ def cancel_tournament(tournament_id):
             f"Tournament is already {tournament.status}", 400,
         )
 
-    # Notify all registered captains
     for entry in tournament.tournament_teams.filter_by(
         status=TournamentTeam.STATUS_REGISTERED
     ).all():
@@ -394,7 +455,6 @@ def cancel_tournament(tournament_id):
 @tournaments_bp.route('/my', methods=['GET'])
 @jwt_required()
 def my_tournaments():
-    """List tournaments I organize."""
     user = get_current_user()
     query = Tournament.query.filter_by(
         organizer_user_id=user.id
@@ -411,7 +471,6 @@ def my_tournaments():
 @jwt_required()
 @limiter.limit("50 per hour")
 def invite_team(tournament_id):
-    """Organizer invites an existing team to the tournament."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -476,13 +535,12 @@ def invite_team(tournament_id):
 
 
 # ─────────────────────────────────────────────────────────────
-#  Approve / Reject a team's join request (organizer side)
+#  Approve / Reject
 # ─────────────────────────────────────────────────────────────
 
 @tournaments_bp.route('/<tournament_id>/teams/<entry_id>/approve', methods=['POST'])
 @jwt_required()
 def approve_team(tournament_id, entry_id):
-    """Organizer approves a JOIN_REQUESTED team → ACCEPTED."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -503,7 +561,6 @@ def approve_team(tournament_id, entry_id):
             f"Cannot approve entry in {entry.status} status", 400,
         )
 
-    # Check if tournament is already full (accepted + registered = required_teams)
     occupied = TournamentTeam.query.filter(
         TournamentTeam.tournament_id == tournament.id,
         TournamentTeam.status.in_([
@@ -521,7 +578,6 @@ def approve_team(tournament_id, entry_id):
     entry.status = TournamentTeam.STATUS_ACCEPTED
     entry.responded_at = datetime.now(timezone.utc)
 
-    # First team accepted → transition to FILLING_TEAMS
     if tournament.status == Tournament.ST_REGISTRATION_OPEN:
         tournament.status = Tournament.ST_FILLING_TEAMS
 
@@ -546,7 +602,6 @@ def approve_team(tournament_id, entry_id):
 @tournaments_bp.route('/<tournament_id>/teams/<entry_id>/reject', methods=['POST'])
 @jwt_required()
 def reject_team(tournament_id, entry_id):
-    """Organizer rejects a JOIN_REQUESTED or declines an INVITED team."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -590,13 +645,12 @@ def reject_team(tournament_id, entry_id):
 
 
 # ─────────────────────────────────────────────────────────────
-#  Available teams for inviting (organizer searches by name)
+#  Available teams for inviting
 # ─────────────────────────────────────────────────────────────
 
 @tournaments_bp.route('/<tournament_id>/available-teams', methods=['GET'])
 @jwt_required()
 def available_teams_for_tournament(tournament_id):
-    """Teams not yet in this tournament — for organizer to invite."""
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -608,7 +662,6 @@ def available_teams_for_tournament(tournament_id):
 
     q = (request.args.get('q') or '').strip()
 
-    # Teams already in this tournament
     existing_team_ids = [
         tt.team_id for tt in tournament.tournament_teams.all()
     ]
@@ -633,10 +686,6 @@ def available_teams_for_tournament(tournament_id):
 @tournaments_bp.route('/<tournament_id>/close-registration', methods=['POST'])
 @jwt_required()
 def close_registration(tournament_id):
-    """
-    Organizer finalizes the tournament after all required teams have paid.
-    Generates a unique payout code and creates an OrganizerPayout record.
-    """
     user = get_current_user()
     tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
@@ -668,7 +717,6 @@ def close_registration(tournament_id):
             },
         )
 
-    # Generate payout code + record
     if not tournament.payout:
         payout_code = _generate_payout_code()
         gross = float(tournament.total_required_from_teams or 0)
@@ -680,7 +728,7 @@ def close_registration(tournament_id):
             organizer_user_id=user.id,
             payout_code=payout_code,
             gross_collected=gross,
-            platform_fee_deducted=platform,
+            platform_fee=platform,
             net_to_organizer=net,
             status=OrganizerPayout.STATUS_PENDING,
         )
@@ -689,7 +737,6 @@ def close_registration(tournament_id):
         tournament.payout_code = payout_code
         tournament.payout_status = 'PENDING'
     else:
-        # Already has a payout record (shouldn't happen, but safe)
         payout = tournament.payout
 
     tournament.status = Tournament.ST_REGISTRATION_CLOSED

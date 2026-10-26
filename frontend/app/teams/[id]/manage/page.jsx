@@ -30,6 +30,7 @@ export default function ManageTeamPage() {
 
   const [acceptingTournament, setAcceptingTournament] = useState(null);
   const [decliningTournament, setDecliningTournament] = useState(null);
+  const [payingEntry, setPayingEntry] = useState(null);
 
   const logoInputRef = useRef(null);
 
@@ -172,6 +173,22 @@ export default function ManageTeamPage() {
     });
   };
 
+  // Pay entry fee for a tournament
+  const handlePayEntryFee = async (entry) => {
+    setPayingEntry(entry.id);
+    try {
+      const res = await api.initializeTeamEntryPayment(data.team.id, entry.tournament_id);
+      window.location.href = res.authorization_url;
+    } catch (e) {
+      setAlert({
+        title: "Could not start payment",
+        body: e.message || "Please try again.",
+        variant: "danger",
+      });
+      setPayingEntry(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1C1928] flex items-center justify-center">
@@ -195,7 +212,14 @@ export default function ManageTeamPage() {
     );
   }
 
-  const { team, members, join_requests = [], sent_invitations = [], tournament_invitations = [] } = data;
+  const {
+    team, members, join_requests = [], sent_invitations = [],
+    tournament_invitations = [], tournament_entries = [],
+  } = data;
+
+  const payableEntries = tournament_entries.filter(
+    (e) => e.status === "ACCEPTED" || e.status === "REGISTERED"
+  );
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -354,6 +378,103 @@ export default function ManageTeamPage() {
                         Decline
                       </button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tournament registrations — pay / registered */}
+        {payableEntries.length > 0 && (
+          <div className="bg-[#242030] rounded-xl border border-[#D4AF6A]/40 p-6 mb-6">
+            <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-[#D4AF6A]" />
+              Tournament registrations
+            </h2>
+            <div className="space-y-3">
+              {payableEntries.map((entry) => {
+                const isRegistered = entry.status === "REGISTERED";
+                const squad = members.length;
+                const tooSmall = squad < entry.min_players_per_team;
+                const tooBig = squad > entry.max_players_per_team;
+                const total = entry.team_entry_fee + entry.platform_fee_per_team;
+                const paying = payingEntry === entry.id;
+
+                return (
+                  <div key={entry.id} className="rounded-lg border border-white/10 bg-[#1C1928] p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold">
+                          {entry.tournament_name || "Tournament"}
+                        </h3>
+                        <p className="text-xs text-white/50 mt-0.5">
+                          {isRegistered
+                            ? "✓ Registered — payment received"
+                            : "Accepted — awaiting payment"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-white/50">Total to pay</p>
+                        <p className="text-[#D4AF6A] font-semibold">
+                          {entry.fee_currency} {total.toLocaleString()}
+                        </p>
+                        <p className="text-[10px] text-white/40 mt-0.5">
+                          (incl. {entry.platform_fee_per_team.toLocaleString()} platform fee)
+                        </p>
+                      </div>
+                    </div>
+
+                    {isRegistered ? (
+                      <p className="text-xs text-green-400 mt-2">
+                        Paid
+                        {entry.registered_at
+                          ? ` · ${new Date(entry.registered_at).toLocaleDateString()}`
+                          : ""}
+                      </p>
+                    ) : (
+                      <>
+                        <div
+                          className={`rounded-md border px-3 py-2 mb-3 text-xs ${
+                            tooSmall
+                              ? "border-yellow-500/20 bg-yellow-500/5 text-yellow-400"
+                              : tooBig
+                              ? "border-red-500/20 bg-red-500/5 text-red-400"
+                              : "border-green-500/20 bg-green-500/5 text-green-400"
+                          }`}
+                        >
+                          {tooSmall && (
+                            <>
+                              ⚠ Add {entry.min_players_per_team - squad} more player(s).
+                              Minimum is {entry.min_players_per_team}.
+                            </>
+                          )}
+                          {tooBig && (
+                            <>
+                              ⚠ Remove {squad - entry.max_players_per_team} player(s).
+                              Maximum is {entry.max_players_per_team}.
+                            </>
+                          )}
+                          {!tooSmall && !tooBig && (
+                            <>✓ Squad size OK ({squad} players). You can pay now.</>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handlePayEntryFee(entry)}
+                          disabled={!entry.can_pay || paying}
+                          className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-4 py-2 text-sm font-medium hover:bg-[#D4AF6A]/90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {paying ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trophy className="w-4 h-4" />
+                          )}
+                          {paying
+                            ? "Starting checkout…"
+                            : `Pay ${entry.fee_currency} ${total.toLocaleString()}`}
+                        </button>
+                      </>
+                    )}
                   </div>
                 );
               })}

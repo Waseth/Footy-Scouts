@@ -128,3 +128,45 @@ class NotificationService:
             related_id=team_id,
             related_type="Team",
         )
+
+    # ── Tournament payments ──
+
+    @staticmethod
+    def notify_tournament_entry_paid(captain_user_id: str, team_name: str,
+                                     tournament_name: str, tournament_id: str,
+                                     organizer_user_id: str):
+        """
+        Two notifications: the captain whose team is now registered, and the
+        organizer of the tournament so they see the new REGISTERED team.
+        """
+        NotificationService.create(
+            user_id=captain_user_id,
+            title="Tournament entry confirmed",
+            body=f"Payment received. {team_name} is now registered for {tournament_name}.",
+            notification_type="TOURNAMENT",
+            related_id=tournament_id,
+            related_type="Tournament",
+        )
+        NotificationService.create(
+            user_id=organizer_user_id,
+            title="Team registered",
+            body=f"{team_name} has paid and is now registered for {tournament_name}.",
+            notification_type="TOURNAMENT",
+            related_id=tournament_id,
+            related_type="Tournament",
+        )
+
+    @staticmethod
+    def notify_tournament_refunded(captain_user_id: str, team_name: str,
+                                   tournament_name: str, amount: float,
+                                   currency: str = "KES"):
+        return NotificationService.create(
+            user_id=captain_user_id,
+            title="Tournament entry refunded",
+            body=(
+                f"Your entry fee for {team_name} in {tournament_name} "
+                f"has been refunded: {currency} {amount:,.2f}. "
+                f"Funds return within 5-7 business days."
+            ),
+            notification_type="TOURNAMENT",
+        )

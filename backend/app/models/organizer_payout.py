@@ -37,16 +37,16 @@ class OrganizerPayout(db.Model):
     )
 
     # Amounts
-    gross_collected = db.Column(db.Numeric(12, 2), nullable=False)        # what teams paid
-    platform_fee = db.Column(db.Numeric(12, 2), nullable=False)          # our commission
-    net_to_organizer = db.Column(db.Numeric(12, 2), nullable=False)      # what organizer gets
+    gross_collected = db.Column(db.Numeric(12, 2), nullable=False)   # what teams paid
+    platform_fee = db.Column(db.Numeric(12, 2), nullable=False)       # our commission
+    net_to_organizer = db.Column(db.Numeric(12, 2), nullable=False)   # what organizer gets
 
     # Payout state
     status = db.Column(db.String(20), default=STATUS_PENDING, nullable=False)
     payout_code = db.Column(db.String(64), nullable=True, unique=True, index=True)
 
     # Admin payment details
-    payment_method = db.Column(db.String(20), nullable=True)             # BANK | MPESA
+    payment_method = db.Column(db.String(20), nullable=True)      # BANK | MPESA
     transaction_reference = db.Column(db.String(255), nullable=True)
     paid_by_admin_id = db.Column(
         db.String(36),

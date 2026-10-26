@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowLeft, Shield, Users, Loader2, Settings, UserPlus,
+  CreditCard, CheckCircle,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -19,19 +20,23 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [requesting, setRequesting] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [alert, setAlert] = useState(null);
 
+  const load = async () => {
+    try {
+      const res = await api.getTeam(params.id);
+      setData(res);
+    } catch (e) {
+      setError(e.message || "Team not found");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.getTeam(params.id);
-        setData(res);
-      } catch (e) {
-        setError(e.message || "Team not found");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   const handleRequestJoin = async () => {
@@ -51,6 +56,21 @@ export default function TeamPage() {
       });
     } finally {
       setRequesting(false);
+    }
+  };
+
+  const handlePayNow = async (entry) => {
+    setPaying(true);
+    try {
+      const res = await api.initializeTeamEntryPayment(entry.team_id || entry.teamId, entry.tournament_id || entry.tournamentId);
+      window.location.href = res.authorization_url;
+    } catch (e) {
+      setAlert({
+        title: "Could not start payment",
+        body: e.message || "Please try again.",
+        variant: "danger",
+      });
+      setPaying(false);
     }
   };
 
@@ -78,7 +98,20 @@ export default function TeamPage() {
     );
   }
 
-  const { team, members, is_captain } = data;
+  const {
+    team, members, is_captain,
+    tournament_entries = [],
+  } = data;
+
+  const payableEntry = is_captain
+    ? tournament_entries.find(
+        (e) => e.status === "ACCEPTED" && e.can_pay
+      )
+    : null;
+
+  const registeredEntries = is_captain
+    ? tournament_entries.filter((e) => e.status === "REGISTERED")
+    : [];
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -91,6 +124,53 @@ export default function TeamPage() {
           <ArrowLeft className="w-5 h-5" />
           {is_captain ? "Back to my teams" : "Back to available teams"}
         </Link>
+
+        {/* 🆕 Payment-pending banner for captain */}
+        {payableEntry && (
+          <div className="mb-6 rounded-xl border border-[#D4AF6A] bg-[#D4AF6A]/10 p-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <p className="text-[#D4AF6A] font-semibold">
+                  Payment pending for {payableEntry.tournament_name}
+                </p>
+                <p className="text-white/70 text-sm mt-1">
+                  Your team was accepted. Pay the entry fee to confirm your slot.
+                </p>
+                <p className="text-white/40 text-xs mt-1">
+                  Total: {payableEntry.fee_currency}{" "}
+                  {(payableEntry.team_entry_fee + payableEntry.platform_fee_per_team).toLocaleString()}
+                  {" "}(incl. {payableEntry.platform_fee_per_team.toLocaleString()} platform fee)
+                </p>
+              </div>
+              <button
+                onClick={() => handlePayNow(payableEntry)}
+                disabled={paying}
+                className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-semibold hover:bg-[#D4AF6A]/90 transition disabled:opacity-50 shrink-0"
+              >
+                {paying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Starting checkout…
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4" /> Pay now
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 🆕 Registered banner (informational) */}
+        {registeredEntries.length > 0 && (
+          <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-4">
+            <p className="text-green-400 text-sm font-medium flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Registered for{" "}
+              {registeredEntries.map((e) => e.tournament_name).join(", ")}
+            </p>
+          </div>
+        )}
 
         <div className="bg-[#242030] rounded-xl border border-white/10 p-6 mb-6">
           <div className="flex items-start gap-5 flex-wrap">

@@ -7,78 +7,59 @@ import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/InputField";
+import Checkbox from "@/components/form/Checkbox";
 import Button from "@/components/elements/Button";
 
-const signupSchema = z
-  .object({
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string().min(6, "Please confirm your password"),
-    role: z.enum(["PLAYER", "SCOUT", "INSTITUTION"]),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email address."),
+  password: z.string().min(1, "Password is required."),
+  remember: z.boolean(),
+});
 
-export default function SignUpForm() {
+export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const redirectTo = searchParams.get("redirect");
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const intent = searchParams.get("intent");
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("PLAYER");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    role: "",
-    general: "",
-  });
+  const [errors, setErrors] = useState({ email: "", password: "", general: "" });
 
-  const handleSignup = async (e) => {
+  const buildRedirectUrl = () => {
+    if (!intent) return redirectTo;
+    const sep = redirectTo.includes("?") ? "&" : "?";
+    return `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`;
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setErrors({ email: "", password: "", confirmPassword: "", role: "", general: "" });
+    setErrors({ email: "", password: "", general: "" });
+    const loginData = { email, password, remember: isChecked };
 
-    if (!isChecked) {
-      setErrors((prev) => ({
-        ...prev,
-        general: "Please accept the Terms and Privacy Policy to continue.",
-      }));
-      return;
-    }
-
-    const formData = { email, password, confirmPassword, role };
-    const result = signupSchema.safeParse(formData);
+    const result = loginSchema.safeParse(loginData);
     if (!result.success) {
       const formatted = result.error.format();
       setErrors({
         email: formatted.email?._errors[0] || "",
         password: formatted.password?._errors[0] || "",
-        confirmPassword: formatted.confirmPassword?._errors[0] || "",
-        role: formatted.role?._errors[0] || "",
         general: "",
       });
       return;
     }
 
     setLoading(true);
-
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        credentials: "include",
+        body: JSON.stringify(loginData),
       });
-
       const data = await res.json();
 
       if (res.ok && data.data) {
@@ -92,64 +73,81 @@ export default function SignUpForm() {
           localStorage.setItem("user", JSON.stringify(data.data.user));
         }
 
-        // Routing priority after signup:
-        //   1. If a redirect target was provided, honour it (preserve intent).
-        //   2. Otherwise go to onboarding (new user flow).
-        if (redirectTo) {
-          const sep = redirectTo.includes("?") ? "&" : "?";
-          const url = intent
-            ? `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`
-            : redirectTo;
-          router.push(url);
+        // 🆕 Route admins to the admin panel — regardless of ?redirect=
+        const isAdmin = data.data.user?.role === "ADMIN";
+        if (isAdmin) {
+          router.push("/admin");
         } else {
-          router.push("/onboarding");
+          router.push(buildRedirectUrl());
         }
       } else {
-        setErrors((prev) => ({
-          ...prev,
-          general: data.error || data.message || "Signup failed",
-        }));
+        if (data.error === "Invalid email or password") {
+          setErrors((prev) => ({
+            ...prev,
+            general: "Invalid email or password. Please try again or create an account.",
+          }));
+        } else {
+          setErrors((prev) => ({
+            ...prev,
+            general: data.error || data.message || "Login failed",
+          }));
+        }
       }
     } catch (err) {
-      console.error(err);
-      setErrors((prev) => ({ ...prev, general: "Error during signup" }));
+      console.error("Login error:", err);
+      if (err.message === "Failed to fetch" || err.name === "TypeError") {
+        setErrors((prev) => ({
+          ...prev,
+          general:
+            "Cannot connect to the server. Please make sure the backend is running on http://localhost:5000",
+        }));
+      } else {
+        setErrors((prev) => ({ ...prev, general: "Error during login" }));
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Build login link preserving redirect+intent
-  const loginHref = (() => {
+  const signupHref = (() => {
     const params = new URLSearchParams();
     if (redirectTo) params.set("redirect", redirectTo);
     if (intent) params.set("intent", intent);
     const qs = params.toString();
-    return qs ? `/login?${qs}` : "/login";
+    return qs ? `/signup?${qs}` : "/signup";
   })();
 
   return (
-    <div className="flex w-full flex-col justify-center overflow-y-auto px-6 py-16 lg:w-1/2 lg:px-16">
+    <div className="flex w-full flex-col justify-center px-6 py-16 lg:w-1/2 lg:px-16">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-8">
-          <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl">
-            Create your profile
-          </h1>
+          <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl">Login</h1>
           <p className="text-sm text-white/60">
-            Register to get discovered by scouts, agents, and clubs.
+            Enter your email and password to access your profile.
           </p>
           {intent === "view_full_profile" && (
             <p className="mt-3 text-sm text-[#D4AF6A]">
-              Create an account to view full player details.
+              Log in to view full player details.
             </p>
           )}
           {intent === "contact_scout" && (
             <p className="mt-3 text-sm text-[#D4AF6A]">
-              Create an account to contact this scout. A premium account is required to send a message.
+              Log in to contact this scout. A premium account is required to send a message.
+            </p>
+          )}
+          {intent === "upload_highlights" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in to upload highlights. A premium account is required to upload video.
+            </p>
+          )}
+          {intent === "register_tournament" && (
+            <p className="mt-3 text-sm text-[#D4AF6A]">
+              Log in or create an account to register for tournaments.
             </p>
           )}
         </div>
 
-        <form onSubmit={handleSignup} className="space-y-5">
+        <form onSubmit={handleLogin} className="space-y-6">
           {errors.general && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
               {errors.general}
@@ -168,7 +166,9 @@ export default function SignUpForm() {
               onChange={(e) => setEmail(e.target.value)}
               error={!!errors.email}
             />
-            {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+            )}
           </div>
 
           <div>
@@ -179,7 +179,7 @@ export default function SignUpForm() {
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password (min 6 characters)"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 error={!!errors.password}
@@ -191,81 +191,32 @@ export default function SignUpForm() {
                 {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
               </span>
             </div>
-            {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
-          </div>
-
-          <div>
-            <Label htmlFor="confirmPassword">
-              Confirm Password <span className="text-red-500">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                error={!!errors.confirmPassword}
-              />
-              <span
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-white/50"
-              >
-                {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
-              </span>
-            </div>
-            {errors.confirmPassword && (
-              <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>
+            {errors.password && (
+              <p className="mt-1 text-sm text-red-500">{errors.password}</p>
             )}
           </div>
 
-          <div>
-            <Label htmlFor="role">
-              I am a <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white focus:border-[#D4AF6A]/60 outline-none transition"
-            >
-              <option value="PLAYER">Player</option>
-              <option value="SCOUT">Scout / Agent</option>
-              <option value="INSTITUTION">Club / Academy / Institution</option>
-            </select>
-            {errors.role && <p className="mt-1 text-sm text-red-500">{errors.role}</p>}
-          </div>
-
-          <div className="flex items-start gap-3">
-            <input
-              id="terms"
-              type="checkbox"
+          <div className="flex items-center justify-between">
+            <Checkbox
+              id="remember"
+              label="Keep me logged in"
               checked={isChecked}
-              onChange={(e) => setIsChecked(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 accent-[#D4AF6A] focus:outline-none focus:ring-0"
+              onChange={setIsChecked}
             />
-            <label htmlFor="terms" className="text-sm font-normal text-white/60">
-              By creating an account you agree to our{" "}
-              <Link href="/terms-of-service" className="text-white/90 hover:underline">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy-policy" className="text-white/90 hover:underline">
-                Privacy Policy
-              </Link>
-              .
-            </label>
+            <Link href="/reset-password" className="gold-font text-sm hover:underline">
+              Forgot password?
+            </Link>
           </div>
 
-          <Button type="submit" size="sm" variant="gold" disabled={loading}>
-            {loading ? "Setting up account..." : "Proceed to onboarding"}
+          <Button type="submit" size="sm" disabled={loading}>
+            {loading ? "Signing in..." : "Login"}
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-white/80 sm:text-left">
-          Already have an account?{" "}
-          <Link href={loginHref} className="gold-font hover:underline">
-            Login
+        <p className="mt-6 text-center text-sm text-white/60 sm:text-left">
+          Don&apos;t have an account?{" "}
+          <Link href={signupHref} className="gold-font hover:underline">
+            Sign Up
           </Link>
         </p>
       </div>

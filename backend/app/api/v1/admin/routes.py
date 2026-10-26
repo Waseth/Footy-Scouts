@@ -4,7 +4,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ....extensions import db
 from ....models import (User, Role, Scout, Institution, Player, Tournament,
-                        MediaUpload, Subscription, Payment, AdminAction)
+                        MediaUpload, Subscription, Payment, AdminAction,
+                        OrganizerPayout, TournamentTeam, Team)
 from ....services.email_service import EmailService
 from ....services.notification_service import NotificationService
 from ....utils.decorators import admin_required, get_current_user
@@ -39,16 +40,16 @@ def dashboard():
     """Platform-wide statistics for the admin dashboard."""
     from sqlalchemy import func
 
-    total_users        = User.query.count()
-    total_players      = Player.query.count()
-    total_scouts       = Scout.query.count()
-    total_institutions = Institution.query.count()
-    pending_scouts     = Scout.query.filter_by(is_verified=False).count()
-    pending_inst       = Institution.query.filter_by(is_verified=False).count()
-    suspended_users    = User.query.filter_by(is_suspended=True).count()
-    total_tournaments  = Tournament.query.count()
-    pending_tournaments= Tournament.query.filter_by(is_approved=False).count()
-    featured_players   = Player.query.filter_by(is_featured=True).count()
+    total_users         = User.query.count()
+    total_players       = Player.query.count()
+    total_scouts        = Scout.query.count()
+    total_institutions  = Institution.query.count()
+    pending_scouts      = Scout.query.filter_by(is_verified=False).count()
+    pending_inst        = Institution.query.filter_by(is_verified=False).count()
+    suspended_users     = User.query.filter_by(is_suspended=True).count()
+    total_tournaments   = Tournament.query.count()
+    pending_tournaments = Tournament.query.filter_by(is_approved=False).count()
+    featured_players    = Player.query.filter_by(is_featured=True).count()
 
     premium_subs = Subscription.query.filter(
         Subscription.plan.in_(['MONTHLY', 'ANNUAL']),
@@ -58,6 +59,11 @@ def dashboard():
     total_revenue = db.session.query(
         func.sum(Payment.amount)
     ).filter_by(status='COMPLETED').scalar() or 0
+
+    # Payouts pending for admin action (used by /admin landing page)
+    pending_payouts = OrganizerPayout.query.filter_by(
+        status=OrganizerPayout.STATUS_PENDING
+    ).count()
 
     return success_response(data={
         'users': {
@@ -78,6 +84,7 @@ def dashboard():
         'featured_players': featured_players,
         'tournaments': total_tournaments,
         'total_revenue_kes': float(total_revenue),
+        'pending_payouts': pending_payouts,
     })
 
 
@@ -109,7 +116,10 @@ def list_users():
         query = query.filter(User.email.ilike(f'%{search}%'))
 
     query = query.order_by(User.created_at.desc())
-    result = paginate_query(query)
+    result = paginate_query(query, schema_fn=lambda u: {
+        **u.to_dict(),
+        'is_suspended': u.is_suspended,
+    })
     return success_response(data=result)
 
 
@@ -123,11 +133,11 @@ def get_user(user_id):
 
     data = user.to_dict()
 
-    if user.is_player() and user.player_profile:
+    if user.has_player_capability() and user.player_profile:
         data['profile'] = user.player_profile.to_dict(include_contact=True)
-    elif user.is_scout() and user.scout_profile:
+    elif user.has_scout_capability() and user.scout_profile:
         data['profile'] = user.scout_profile.to_dict(public=False)
-    elif user.is_institution() and user.institution_profile:
+    elif user.has_institution_capability() and user.institution_profile:
         data['profile'] = user.institution_profile.to_dict(public=False)
 
     return success_response(data={'user': data})
@@ -192,6 +202,42 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return success_response(message="User deleted.")
+
+
+# 🆕 Promote a user to ADMIN role. Requires explicit admin action.
+@admin_bp.route('/users/<user_id>/promote', methods=['POST'])
+@jwt_required()
+@admin_required
+def promote_user_to_admin(user_id):
+    """
+    Promote an existing user to the ADMIN role.
+    Idempotent-ish: returns 409 if the user is already an admin.
+    """
+    admin = get_current_user()
+    user = User.query.get(user_id)
+    if not user:
+        return error_response("User not found", 404)
+    if user.is_admin():
+        return error_response("User is already an admin", 409)
+
+    admin_role = Role.query.filter_by(name='ADMIN').first()
+    if not admin_role:
+        return error_response("ADMIN role missing from database", 500)
+
+    old_role = user.role_name
+    user.role_id = admin_role.id
+
+    _log_action(
+        admin.id, 'PROMOTE_TO_ADMIN', AdminAction.TARGET_USER,
+        target_user_id=user_id,
+        notes=f"Promoted from {old_role} to ADMIN",
+    )
+    db.session.commit()
+
+    return success_response(
+        message=f"{user.email} promoted to ADMIN.",
+        data={'user': user.to_dict()},
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -389,9 +435,8 @@ def cancel_tournament(tournament_id):
 @jwt_required()
 @admin_required
 def list_media():
-    """List all media uploads for moderation."""
     query = MediaUpload.query.order_by(MediaUpload.created_at.desc())
-    status = request.args.get('status')  # approved | rejected
+    status = request.args.get('status')
     if status == 'approved':
         query = query.filter_by(is_approved=True)
     elif status == 'rejected':
@@ -494,7 +539,6 @@ def grant_subscription(user_id):
 @jwt_required()
 @admin_required
 def audit_log():
-    """View the full admin action audit log."""
     query = AdminAction.query.order_by(AdminAction.created_at.desc())
 
     action_filter = request.args.get('action')
@@ -520,15 +564,198 @@ def audit_log():
 @jwt_required()
 @admin_required
 def list_payments():
-    from ....models import Payment
     query = Payment.query.order_by(Payment.created_at.desc())
 
     status = request.args.get('status')
     method = request.args.get('method')
+    purpose = request.args.get('purpose')
     if status:
         query = query.filter_by(status=status.upper())
     if method:
         query = query.filter_by(method=method.upper())
+    if purpose:
+        query = query.filter_by(purpose=purpose.upper())
 
-    result = paginate_query(query)
+    result = paginate_query(query, schema_fn=lambda p: p.to_dict())
     return success_response(data=result)
+
+
+# ─────────────────────────────────────────────────────────────
+#  ORGANIZER PAYOUTS — manual admin settlement
+# ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/payouts', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_payouts():
+    """List organizer payouts. Filter by status."""
+    query = OrganizerPayout.query.order_by(OrganizerPayout.created_at.desc())
+    status = request.args.get('status')
+    if status:
+        query = query.filter_by(status=status.upper())
+    result = paginate_query(query, schema_fn=lambda p: p.to_dict())
+    return success_response(data=result)
+
+
+@admin_bp.route('/payouts/<payout_id>/mark-paid', methods=['POST'])
+@jwt_required()
+@admin_required
+def mark_payout_paid(payout_id):
+    admin = get_current_user()
+    payout = OrganizerPayout.query.get(payout_id)
+    if not payout:
+        return error_response("Payout not found", 404)
+
+    if payout.status == OrganizerPayout.STATUS_PAID:
+        return error_response("Payout is already marked PAID", 409)
+
+    if payout.status not in (OrganizerPayout.STATUS_PENDING, OrganizerPayout.STATUS_FAILED):
+        return error_response(
+            f"Cannot mark {payout.status} payout as PAID", 400,
+        )
+
+    data = request.get_json() or {}
+    method = (data.get('payment_method') or '').upper()
+    reference = (data.get('transaction_reference') or '').strip()
+    notes = (data.get('notes') or '').strip() or None
+
+    if method not in (OrganizerPayout.METHOD_BANK, OrganizerPayout.METHOD_MPESA):
+        return error_response("payment_method must be BANK or MPESA", 400)
+    if not reference:
+        return error_response("transaction_reference is required", 400)
+
+    payout.status = OrganizerPayout.STATUS_PAID
+    payout.payment_method = method
+    payout.transaction_reference = reference
+    payout.paid_by_admin_id = admin.id
+    payout.paid_at = datetime.now(timezone.utc)
+    if notes:
+        payout.notes = notes
+
+    tournament = payout.tournament
+    if tournament:
+        tournament.payout_status = 'PAID'
+        tournament.paid_out_at = payout.paid_at
+
+    _log_action(
+        admin.id, 'MARK_PAYOUT_PAID', 'TOURNAMENT',
+        target_object_id=payout.tournament_id,
+        notes=f"payout={payout.id} method={method} ref={reference}",
+    )
+    db.session.commit()
+
+    if tournament:
+        try:
+            NotificationService.create(
+                user_id=tournament.organizer_user_id,
+                title="Payout sent",
+                body=(
+                    f"Your payout for {tournament.tournament_name} "
+                    f"({tournament.fee_currency} {float(payout.net_to_organizer):,.2f}) "
+                    f"has been sent via {method}."
+                ),
+                notification_type="TOURNAMENT",
+                related_id=tournament.id,
+                related_type="Tournament",
+            )
+        except Exception:
+            pass
+
+    return success_response(data={'payout': payout.to_dict()},
+                            message=f"Payout marked PAID via {method}.")
+
+
+@admin_bp.route('/payouts/<payout_id>/mark-failed', methods=['POST'])
+@jwt_required()
+@admin_required
+def mark_payout_failed(payout_id):
+    admin = get_current_user()
+    payout = OrganizerPayout.query.get(payout_id)
+    if not payout:
+        return error_response("Payout not found", 404)
+    if payout.status == OrganizerPayout.STATUS_PAID:
+        return error_response("Cannot mark a PAID payout as FAILED", 409)
+
+    data = request.get_json() or {}
+    notes = (data.get('notes') or '').strip() or "Marked FAILED by admin"
+
+    payout.status = OrganizerPayout.STATUS_FAILED
+    payout.notes = notes
+
+    _log_action(
+        admin.id, 'MARK_PAYOUT_FAILED', 'TOURNAMENT',
+        target_object_id=payout.tournament_id,
+        notes=f"payout={payout.id}: {notes}",
+    )
+    db.session.commit()
+    return success_response(data={'payout': payout.to_dict()},
+                            message="Payout marked FAILED.")
+
+
+# ─────────────────────────────────────────────────────────────
+#  REFUNDS — manual, admin-triggered
+# ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/payments/<payment_id>/refund', methods=['POST'])
+@jwt_required()
+@admin_required
+def refund_payment(payment_id):
+    admin = get_current_user()
+    payment = Payment.query.get(payment_id)
+    if not payment:
+        return error_response("Payment not found", 404)
+    if payment.status != Payment.STATUS_COMPLETED:
+        return error_response(
+            f"Only COMPLETED payments can be refunded (current: {payment.status})",
+            400,
+        )
+
+    data = request.get_json() or {}
+    reason = (data.get('reason') or '').strip() or "Refunded by admin"
+    reference = (data.get('transaction_reference') or '').strip() or None
+
+    payment.status = Payment.STATUS_REFUNDED
+    payment.failure_reason = None
+    if reference:
+        payment.notes = (payment.notes or "") + f"\nRefund ref: {reference}"
+
+    if (payment.purpose == Payment.PURPOSE_TEAM_TOURNAMENT_ENTRY
+            and payment.team_id and payment.tournament_id):
+        entry = TournamentTeam.query.filter_by(
+            tournament_id=payment.tournament_id,
+            team_id=payment.team_id,
+        ).first()
+        if entry and entry.status == TournamentTeam.STATUS_REGISTERED:
+            entry.status = TournamentTeam.STATUS_WITHDRAWN
+            entry.registered_at = None
+
+        tournament = db.session.get(Tournament, payment.tournament_id)
+        if tournament and tournament.status == Tournament.ST_ALL_TEAMS_REGISTERED:
+            tournament.status = Tournament.ST_FILLING_TEAMS
+
+    _log_action(
+        admin.id, 'REFUND_PAYMENT', 'PAYMENT',
+        target_user_id=payment.user_id,
+        target_object_id=payment.id,
+        reason=reason,
+        notes=f"ref={reference}" if reference else None,
+    )
+    db.session.commit()
+
+    if payment.purpose == Payment.PURPOSE_TEAM_TOURNAMENT_ENTRY and payment.team_id:
+        team = db.session.get(Team, payment.team_id)
+        tournament = db.session.get(Tournament, payment.tournament_id) if payment.tournament_id else None
+        if team and tournament and payment.user_id:
+            try:
+                NotificationService.notify_tournament_refunded(
+                    captain_user_id=payment.user_id,
+                    team_name=team.name,
+                    tournament_name=tournament.tournament_name,
+                    amount=float(payment.amount),
+                    currency=payment.currency,
+                )
+            except Exception:
+                pass
+
+    return success_response(data={'payment': payment.to_dict()},
+                            message="Payment marked REFUNDED.")
