@@ -1,14 +1,77 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Star, MessageCircle, Video, Eye, Check, Loader2, ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Star, MessageCircle, Video, Eye, Check } from "lucide-react";
-
-export const metadata = {
-  title: "Footy Scouts | Subscribe",
-  description: "Upgrade to Footy Scouts premium — contact scouts, upload highlights, and get discovered.",
-};
+import { api } from "@/lib/api";
 
 export default function SubscribePage() {
+  const router = useRouter();
+  const [role, setRole] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      if (!api.isAuthenticated()) {
+        setRole("GUEST");
+        setChecking(false);
+        return;
+      }
+      try {
+        const me = await api.getMe();
+        setRole(me?.role || "PLAYER");
+      } catch {
+        setRole("GUEST");
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-[#1C1928] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#D4AF6A] animate-spin" />
+      </div>
+    );
+  }
+
+  if (role === "SCOUT" || role === "INSTITUTION") {
+    return (
+      <div className="min-h-screen bg-[#1C1928]">
+        <Navbar />
+        <div className="container mx-auto px-4 py-16 max-w-2xl">
+          <div className="rounded-2xl border border-[#D4AF6A]/30 bg-[#242030] p-8 text-center">
+            <h1 className="text-2xl font-bold text-white mb-3">
+              No subscription needed
+            </h1>
+            <p className="text-white/60 mb-6">
+              {role === "SCOUT"
+                ? "Your scout account has full free access — contact players, shortlist talent, organize tournaments."
+                : "Your institution account has full free access — contact players and scouts, shortlist talent, organize tournaments."}
+            </p>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-6 py-3 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (role === "ADMIN") {
+    router.replace("/admin");
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />

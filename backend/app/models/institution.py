@@ -56,7 +56,29 @@ class Institution(db.Model):
     def __repr__(self):
         return f'<Institution {self.institution_name}>'
 
-    def to_dict(self, public=True):
+    def to_dict(self, viewer=None, viewer_is_authenticated=False, public=True):
+        """
+        Tiered serialization.
+
+        Guest / free authenticated:
+            name, type, country, city, description, logo, verified
+        Premium viewer:
+            above + contact_number + email
+        Owner:
+            above + user_id
+        """
+        is_owner = (
+            viewer is not None
+            and viewer_is_authenticated
+            and getattr(self, 'user_id', None) == getattr(viewer, 'id', None)
+        )
+        is_premium_viewer = (
+            viewer is not None
+            and viewer_is_authenticated
+            and not is_owner
+            and getattr(viewer, 'is_premium', lambda: False)()
+        )
+
         data = {
             'id': self.id,
             'institution_name': self.institution_name,
@@ -65,12 +87,19 @@ class Institution(db.Model):
             'city': self.city,
             'description': self.description,
             'logo_url': self.logo_url,
-            'is_verified': self.is_verified,
+            'is_verified': bool(self.is_verified),
             'is_premium': self.user.is_premium() if self.user else False,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'requires_login_to_contact': not viewer_is_authenticated,
         }
-        if not public:
-            data['contact_number'] = self.contact_number
-            data['email'] = self.user.email if self.user else None
+
+        if viewer_is_authenticated:
             data['user_id'] = self.user_id
+
+        if is_owner or is_premium_viewer or not public:
+            data['contact_number'] = self.contact_number
+
+        if is_owner or not public:
+            data['email'] = self.user.email if self.user else None
+
         return data

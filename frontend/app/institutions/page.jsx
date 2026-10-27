@@ -1,0 +1,249 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  ChevronLeft, ChevronRight, ShieldCheck, Lock, Building2,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import CustomSelect from "@/components/CustomSelect";
+
+const GUEST_LIMIT = 3;
+
+const TYPE_LABELS = {
+  SCHOOL: "School",
+  TEAM: "Team / Club",
+  ACADEMY: "Academy",
+  FOOTBALL_ORGANIZATION: "Football Organization",
+};
+
+export default function InstitutionsPage() {
+  const [institutions, setInstitutions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [institutionType, setInstitutionType] = useState("");
+  const [country, setCountry] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  const typeOptions = [
+    { value: "", label: "All Types" },
+    { value: "SCHOOL", label: "School" },
+    { value: "TEAM", label: "Team / Club" },
+    { value: "ACADEMY", label: "Academy" },
+    { value: "FOOTBALL_ORGANIZATION", label: "Organization" },
+  ];
+
+  useEffect(() => {
+    setIsAuthed(api.isAuthenticated());
+  }, []);
+
+  useEffect(() => {
+    fetchInstitutions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, institutionType, country]);
+
+  const fetchInstitutions = async () => {
+    setLoading(true);
+    try {
+      const authed = api.isAuthenticated();
+      const result = await api.getInstitutions({
+        page: authed ? page : 1,
+        per_page: authed ? 12 : GUEST_LIMIT,
+        type: institutionType || undefined,
+        country: country || undefined,
+      });
+      setInstitutions(result.items || []);
+      setTotal(result.total || 0);
+      setTotalPages(result.pages || 1);
+    } catch (error) {
+      console.error("Failed to fetch institutions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearFilters = () => {
+    setInstitutionType("");
+    setCountry("");
+    setPage(1);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#1C1928]">
+      <Navbar />
+
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 pt-20 sm:pt-24">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#D4AF6A]">
+            Institutions
+          </h1>
+          <p className="text-white mt-1 text-sm sm:text-base">
+            {isAuthed
+              ? "Discover schools, clubs, academies and organizations"
+              : "Preview featured institutions. Log in to see more."}
+          </p>
+        </div>
+
+        {isAuthed && (
+          <div className="bg-[#242030] rounded-lg p-4 sm:p-6 border border-white/10 mb-6 sm:mb-8">
+            <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
+              <div className="flex flex-wrap gap-2 sm:gap-3 flex-1">
+                <CustomSelect
+                  value={institutionType}
+                  onChange={setInstitutionType}
+                  options={typeOptions}
+                  placeholder="All Types"
+                  className="flex-1 min-w-[120px] max-w-[180px]"
+                />
+                <input
+                  type="text"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="Country"
+                  className="flex-1 min-w-[100px] max-w-[160px] px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition cursor-pointer text-sm sm:text-base whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3 sm:mb-4 text-white/60 text-sm sm:text-base">
+          {loading
+            ? "Loading..."
+            : isAuthed
+            ? `Showing ${institutions.length} of ${total} institutions`
+            : `Showing ${institutions.length} featured institutions`}
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-[#242030] rounded-lg p-4 sm:p-5 border border-white/10 animate-pulse"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-lg bg-white/10" />
+                  <div className="flex-1">
+                    <div className="h-4 bg-white/10 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-white/10 rounded w-1/2" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : institutions.length === 0 ? (
+          <div className="text-center py-8 sm:py-12">
+            <Building2 className="w-12 h-12 text-white/20 mx-auto mb-3" />
+            <p className="text-white text-base sm:text-lg">No institutions found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {institutions.map((inst) => (
+              <Link
+                key={inst.id}
+                href={`/institutions/${inst.id}`}
+                className="bg-[#242030] rounded-lg p-4 sm:p-5 border border-white/10 hover:border-[#D4AF6A]/50 transition group"
+              >
+                <div className="flex items-center gap-3 sm:gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-lg bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] text-lg font-bold overflow-hidden flex-shrink-0">
+                    {inst.logo_url ? (
+                      <Image
+                        src={inst.logo_url}
+                        alt={inst.institution_name}
+                        width={48}
+                        height={48}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Building2 className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-white group-hover:text-[#D4AF6A] transition text-sm sm:text-base truncate">
+                      {inst.institution_name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 text-xs sm:text-sm text-white/60 truncate">
+                      {TYPE_LABELS[inst.institution_type] || inst.institution_type}
+                      {inst.is_verified && (
+                        <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4 text-[#D4AF6A] flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs sm:text-sm text-white/40 truncate">
+                  {[inst.city, inst.country].filter(Boolean).join(", ") || "—"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {!isAuthed && !loading && institutions.length > 0 && (
+          <div className="mt-10 flex items-start gap-4 rounded-xl border border-[#D4AF6A]/30 bg-[#D4AF6A]/10 p-6">
+            <Lock className="w-6 h-6 text-[#D4AF6A] mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-white font-semibold text-lg">
+                Discover more institutions
+              </h3>
+              <p className="text-white/60 text-sm mt-1 mb-4">
+                Create a free account to browse all {total} institutions. Premium
+                members can contact institutions directly.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/login?redirect=${encodeURIComponent("/institutions")}`}
+                  className="rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/10 transition"
+                >
+                  Create free account
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isAuthed && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-6 sm:mt-8">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <span className="text-white/60 px-3 sm:px-4 text-sm sm:text-base">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <Footer />
+    </div>
+  );
+}

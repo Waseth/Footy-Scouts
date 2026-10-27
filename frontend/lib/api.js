@@ -4,7 +4,6 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://footy-scouts-production.up.railway.app/api/v1";
 
-// Endpoints that must NEVER auto-refresh (avoids loops)
 const AUTH_NO_REFRESH = [
   "/auth/login",
   "/auth/register",
@@ -24,17 +23,13 @@ class ApiService {
 
   getToken() {
     if (this.token) return this.token;
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("access_token");
-    }
+    if (typeof window !== "undefined") return localStorage.getItem("access_token");
     return null;
   }
 
   setToken(token) {
     this.token = token;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("access_token", token);
-    }
+    if (typeof window !== "undefined") localStorage.setItem("access_token", token);
   }
 
   clearToken() {
@@ -48,15 +43,8 @@ class ApiService {
 
   async request(endpoint, options = {}, _retry = false) {
     const token = this.getToken();
-
-    const headers = {
-      "Content-Type": "application/json",
-      ...options.headers,
-    };
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+    const headers = { "Content-Type": "application/json", ...options.headers };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
@@ -66,30 +54,20 @@ class ApiService {
     let data = null;
     const text = await response.text();
     if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { message: text };
-      }
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
     }
 
     const isAuthNoRefresh = AUTH_NO_REFRESH.some((p) => endpoint.startsWith(p));
 
     if (response.status === 401 && !_retry && !isAuthNoRefresh) {
       const refreshed = await this._refreshAccessToken();
-      if (refreshed) {
-        return this.request(endpoint, options, true);
-      }
+      if (refreshed) return this.request(endpoint, options, true);
       this.clearToken();
-      throw new Error(
-        (data && (data.error || data.message)) || "Session expired"
-      );
+      throw new Error((data && (data.error || data.message)) || "Session expired");
     }
 
     if (!response.ok) {
-      throw new Error(
-        (data && (data.error || data.message)) || "Request failed"
-      );
+      throw new Error((data && (data.error || data.message)) || "Request failed");
     }
 
     return data;
@@ -97,15 +75,11 @@ class ApiService {
 
   async _refreshAccessToken() {
     if (this.refreshPromise) return this.refreshPromise;
-
     this.refreshPromise = (async () => {
       try {
         const refreshToken =
-          typeof window !== "undefined"
-            ? localStorage.getItem("refresh_token")
-            : null;
+          typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null;
         if (!refreshToken) return false;
-
         const res = await fetch(`${this.baseUrl}/auth/refresh`, {
           method: "POST",
           headers: {
@@ -113,26 +87,18 @@ class ApiService {
             Authorization: `Bearer ${refreshToken}`,
           },
         });
-
         if (!res.ok) return false;
-
         const data = await res.json();
         const newToken = data?.data?.access_token;
         if (!newToken) return false;
-
         this.setToken(newToken);
         return true;
-      } catch {
-        return false;
-      } finally {
-        this.refreshPromise = null;
-      }
+      } catch { return false; }
+      finally { this.refreshPromise = null; }
     })();
-
     return this.refreshPromise;
   }
 
-  // ── Auth ──
   async register(email, password, role) {
     const result = await this.request("/auth/register", {
       method: "POST",
@@ -164,9 +130,7 @@ class ApiService {
   }
 
   async logout() {
-    try {
-      await this.request("/auth/logout", { method: "POST" });
-    } catch (e) {}
+    try { await this.request("/auth/logout", { method: "POST" }); } catch (e) {}
     this.clearToken();
   }
 
@@ -190,7 +154,7 @@ class ApiService {
     return result;
   }
 
-  // ── Players ──
+  // Players
   async getPlayers(params = {}) {
     const query = new URLSearchParams();
     if (params.search) query.append("name", params.search);
@@ -236,7 +200,7 @@ class ApiService {
     return result.data.player;
   }
 
-  // ── Scouts ──
+  // Scouts
   async getScouts(params = {}) {
     const query = new URLSearchParams();
     if (params.country) query.append("country", params.country);
@@ -260,6 +224,14 @@ class ApiService {
     return result.data.scout;
   }
 
+  async updateScoutProfile(data) {
+    const result = await this.request("/scouts/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return result.data.scout;
+  }
+
   async contactScout(scoutId) {
     const result = await this.request(`/scouts/${scoutId}/contact`, {
       method: "POST",
@@ -267,7 +239,88 @@ class ApiService {
     return result.data;
   }
 
-  // ── Tournaments (public) ──
+  async getScoutContactInfo(scoutId) {
+    const result = await this.request(`/scouts/${scoutId}/contact-info`);
+    return result.data;
+  }
+
+  // Shortlist
+  async getShortlist() {
+    const result = await this.request("/scouts/shortlist");
+    return result.data;
+  }
+
+  async addToShortlist(playerUserId, note = null) {
+    const result = await this.request(`/scouts/shortlist/${playerUserId}`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+    return result.data.item;
+  }
+
+  async removeFromShortlist(playerUserId) {
+    return this.request(`/scouts/shortlist/${playerUserId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async checkShortlist(playerUserId) {
+    const result = await this.request(`/scouts/shortlist/check/${playerUserId}`);
+    return result.data;
+  }
+
+  // Institutions
+  async getInstitutions(params = {}) {
+    const query = new URLSearchParams();
+    if (params.country) query.append("country", params.country);
+    if (params.type) query.append("type", params.type);
+    if (params.page) query.append("page", String(params.page));
+    if (params.per_page) query.append("per_page", String(params.per_page));
+    const result = await this.request(`/institutions?${query.toString()}`);
+    return result.data;
+  }
+
+  async getInstitution(id) {
+    const result = await this.request(`/institutions/${id}`);
+    return result.data.institution;
+  }
+
+  async createInstitutionProfile(data) {
+    const result = await this.request("/institutions/profile", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return result.data.institution;
+  }
+
+  async updateInstitutionProfile(data) {
+    const result = await this.request("/institutions/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return result.data.institution;
+  }
+
+  async getInstitutionContactInfo(id) {
+    const result = await this.request(`/institutions/${id}/contact-info`);
+    return result.data;
+  }
+
+  async uploadInstitutionLogo(id, file) {
+    const token = this.getToken();
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${this.baseUrl}/institutions/profile/logo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    return data.data.logo_url;
+  }
+
+  // Tournaments
   async getTournaments(params = {}) {
     const query = new URLSearchParams();
     if (params.type) query.append("type", params.type);
@@ -301,16 +354,12 @@ class ApiService {
   }
 
   async publishTournament(id) {
-    const result = await this.request(`/tournaments/${id}/publish`, {
-      method: "POST",
-    });
+    const result = await this.request(`/tournaments/${id}/publish`, { method: "POST" });
     return result.data.tournament;
   }
 
   async cancelTournament(id) {
-    const result = await this.request(`/tournaments/${id}/cancel`, {
-      method: "POST",
-    });
+    const result = await this.request(`/tournaments/${id}/cancel`, { method: "POST" });
     return result.data.tournament;
   }
 
@@ -323,13 +372,10 @@ class ApiService {
   }
 
   async inviteTeamToTournament(tournamentId, teamId) {
-    const result = await this.request(
-      `/tournaments/${tournamentId}/invite-team`,
-      {
-        method: "POST",
-        body: JSON.stringify({ team_id: teamId }),
-      }
-    );
+    const result = await this.request(`/tournaments/${tournamentId}/invite-team`, {
+      method: "POST",
+      body: JSON.stringify({ team_id: teamId }),
+    });
     return result.data.entry;
   }
 
@@ -342,10 +388,9 @@ class ApiService {
   }
 
   async rejectTournamentTeam(tournamentId, entryId) {
-    return this.request(
-      `/tournaments/${tournamentId}/teams/${entryId}/reject`,
-      { method: "POST" }
-    );
+    return this.request(`/tournaments/${tournamentId}/teams/${entryId}/reject`, {
+      method: "POST",
+    });
   }
 
   async getAvailableTeamsForTournament(tournamentId, q = "") {
@@ -370,7 +415,6 @@ class ApiService {
     return result.data.payout;
   }
 
-  // ── Captain: tournament actions for their team ──
   async requestTeamToTournament(teamId, tournamentId) {
     const result = await this.request(`/teams/${teamId}/request-tournament`, {
       method: "POST",
@@ -388,35 +432,12 @@ class ApiService {
   }
 
   async declineTournamentInvite(teamId, entryId) {
-    return this.request(
-      `/teams/${teamId}/invitations/${entryId}/decline`,
-      { method: "POST" }
-    );
-  }
-
-  // ── Organizers ──
-  async getMyOrganizerProfile() {
-    const result = await this.request("/organizers/me");
-    return result.data.organizer;
-  }
-
-  async createOrganizerProfile(data) {
-    const result = await this.request("/organizers", {
+    return this.request(`/teams/${teamId}/invitations/${entryId}/decline`, {
       method: "POST",
-      body: JSON.stringify(data),
     });
-    return result.data.organizer;
   }
 
-  async updateOrganizerProfile(data) {
-    const result = await this.request("/organizers", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-    return result.data.organizer;
-  }
-
-  // ── Subscriptions ──
+  // Subscriptions
   async getSubscriptionPlans() {
     const result = await this.request("/subscriptions/plans");
     return result.data.plans;
@@ -428,13 +449,11 @@ class ApiService {
   }
 
   async cancelSubscription() {
-    const result = await this.request("/subscriptions/cancel", {
-      method: "POST",
-    });
+    const result = await this.request("/subscriptions/cancel", { method: "POST" });
     return result.data;
   }
 
-  // ── Payments ──
+  // Payments
   async initializePaystackSubscription(plan) {
     const result = await this.request("/payments/paystack/initialize", {
       method: "POST",
@@ -455,17 +474,14 @@ class ApiService {
   }
 
   async initializeTeamEntryPayment(teamId, tournamentId) {
-    const result = await this.request(
-      "/payments/paystack/initialize/team-entry",
-      {
-        method: "POST",
-        body: JSON.stringify({ team_id: teamId, tournament_id: tournamentId }),
-      }
-    );
+    const result = await this.request("/payments/paystack/initialize/team-entry", {
+      method: "POST",
+      body: JSON.stringify({ team_id: teamId, tournament_id: tournamentId }),
+    });
     return result.data;
   }
 
-  // ── Notifications ──
+  // Notifications
   async getNotifications(params = {}) {
     const query = new URLSearchParams();
     if (params.page) query.append("page", String(params.page));
@@ -480,9 +496,7 @@ class ApiService {
   }
 
   async markNotificationRead(id) {
-    const result = await this.request(`/notifications/${id}/read`, {
-      method: "POST",
-    });
+    const result = await this.request(`/notifications/${id}/read`, { method: "POST" });
     return result.data.notification;
   }
 
@@ -494,7 +508,7 @@ class ApiService {
     return this.request(`/notifications/${id}`, { method: "DELETE" });
   }
 
-  // ── Teams ──
+  // Teams
   async createTeam(data) {
     const result = await this.request("/teams", {
       method: "POST",
@@ -556,9 +570,7 @@ class ApiService {
   }
 
   async removeTeamMember(teamId, memberId) {
-    return this.request(`/teams/${teamId}/members/${memberId}`, {
-      method: "DELETE",
-    });
+    return this.request(`/teams/${teamId}/members/${memberId}`, { method: "DELETE" });
   }
 
   async leaveTeam(teamId) {
@@ -585,17 +597,15 @@ class ApiService {
   }
 
   async acceptJoinRequest(teamId, requestId) {
-    return this.request(
-      `/teams/${teamId}/join-requests/${requestId}/accept`,
-      { method: "POST" }
-    );
+    return this.request(`/teams/${teamId}/join-requests/${requestId}/accept`, {
+      method: "POST",
+    });
   }
 
   async rejectJoinRequest(teamId, requestId) {
-    return this.request(
-      `/teams/${teamId}/join-requests/${requestId}/reject`,
-      { method: "POST" }
-    );
+    return this.request(`/teams/${teamId}/join-requests/${requestId}/reject`, {
+      method: "POST",
+    });
   }
 
   async requestToJoinTeam(teamId, message = "") {
@@ -610,13 +620,11 @@ class ApiService {
     const query = new URLSearchParams();
     if (teamId) query.append("team_id", teamId);
     if (q) query.append("q", q);
-    const result = await this.request(
-      `/teams/search-players?${query.toString()}`
-    );
+    const result = await this.request(`/teams/search-players?${query.toString()}`);
     return result.data.players;
   }
 
-  // ── Invitations ──
+  // Invitations
   async getMyPlayerInvitations(params = {}) {
     const query = new URLSearchParams();
     if (params.page) query.append("page", String(params.page));
@@ -626,24 +634,18 @@ class ApiService {
   }
 
   async acceptPlayerInvite(inviteId) {
-    return this.request(`/invitations/player/${inviteId}/accept`, {
-      method: "POST",
-    });
+    return this.request(`/invitations/player/${inviteId}/accept`, { method: "POST" });
   }
 
   async rejectPlayerInvite(inviteId) {
-    return this.request(`/invitations/player/${inviteId}/reject`, {
-      method: "POST",
-    });
+    return this.request(`/invitations/player/${inviteId}/reject`, { method: "POST" });
   }
 
   async getMyJoinRequests(params = {}) {
     const query = new URLSearchParams();
     if (params.page) query.append("page", String(params.page));
     if (params.per_page) query.append("per_page", String(params.per_page));
-    const result = await this.request(
-      `/invitations/my-join-requests?${query.toString()}`
-    );
+    const result = await this.request(`/invitations/my-join-requests?${query.toString()}`);
     return result.data;
   }
 
@@ -653,7 +655,7 @@ class ApiService {
     });
   }
 
-  // ── Admin ──
+  // Admin
   async getAdminDashboard() {
     const result = await this.request("/admin/dashboard");
     return result.data;
@@ -678,9 +680,7 @@ class ApiService {
   }
 
   async unsuspendUser(userId) {
-    return this.request(`/admin/users/${userId}/unsuspend`, {
-      method: "POST",
-    });
+    return this.request(`/admin/users/${userId}/unsuspend`, { method: "POST" });
   }
 
   async deleteUser(userId, reason = "") {
@@ -705,24 +705,18 @@ class ApiService {
   }
 
   async markPayoutPaid(payoutId, { payment_method, transaction_reference, notes }) {
-    const result = await this.request(
-      `/admin/payouts/${payoutId}/mark-paid`,
-      {
-        method: "POST",
-        body: JSON.stringify({ payment_method, transaction_reference, notes }),
-      }
-    );
+    const result = await this.request(`/admin/payouts/${payoutId}/mark-paid`, {
+      method: "POST",
+      body: JSON.stringify({ payment_method, transaction_reference, notes }),
+    });
     return result.data.payout;
   }
 
   async markPayoutFailed(payoutId, { notes }) {
-    const result = await this.request(
-      `/admin/payouts/${payoutId}/mark-failed`,
-      {
-        method: "POST",
-        body: JSON.stringify({ notes }),
-      }
-    );
+    const result = await this.request(`/admin/payouts/${payoutId}/mark-failed`, {
+      method: "POST",
+      body: JSON.stringify({ notes }),
+    });
     return result.data.payout;
   }
 
@@ -737,13 +731,10 @@ class ApiService {
   }
 
   async refundPayment(paymentId, { reason, transaction_reference }) {
-    const result = await this.request(
-      `/admin/payments/${paymentId}/refund`,
-      {
-        method: "POST",
-        body: JSON.stringify({ reason, transaction_reference }),
-      }
-    );
+    const result = await this.request(`/admin/payments/${paymentId}/refund`, {
+      method: "POST",
+      body: JSON.stringify({ reason, transaction_reference }),
+    });
     return result.data.payment;
   }
 
@@ -757,9 +748,7 @@ class ApiService {
     try {
       const u = JSON.parse(localStorage.getItem("user") || "{}");
       return u.role === "ADMIN";
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 }
 

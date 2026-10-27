@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Receipt, CreditCard, Users, Image as ImageIcon,
-  LogOut, ArrowLeft, Loader2, ShieldAlert,
+  LogOut, ArrowLeft, Loader2, ShieldAlert, ShieldCheck, Building2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -14,6 +14,8 @@ const TABS = [
   { href: "/admin/payouts", label: "Payouts", icon: Receipt },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/scouts", label: "Scouts", icon: ShieldCheck },
+  { href: "/admin/institutions", label: "Institutions", icon: Building2 },
   { href: "/admin/media", label: "Media", icon: ImageIcon },
 ];
 
@@ -29,7 +31,6 @@ export default function AdminLayout({ children }) {
       return;
     }
     if (!api.isAdmin()) {
-      // logged in but not admin — kick out to regular dashboard
       router.replace("/dashboard");
       return;
     }

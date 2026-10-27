@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   User, Trophy, Users, Calendar, CreditCard, Settings,
-  LogOut, Image as ImageIcon, Shield, Bell,
+  LogOut, Image as ImageIcon, Shield, Bell, Building2, Search, Bookmark,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [myTeamsCount, setMyTeamsCount] = useState(null);
   const [invitationsCount, setInvitationsCount] = useState(0);
   const [myTournamentsCount, setMyTournamentsCount] = useState(null);
+  const [shortlistCount, setShortlistCount] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,26 +42,45 @@ export default function DashboardPage() {
           try {
             const res = await api.request("/players/profile");
             setProfile(res.data.player);
-          } catch {
-            setProfile(null);
-          }
+          } catch { setProfile(null); }
         } else if (userData.role === "SCOUT") {
           try {
             const res = await api.request("/scouts/profile");
             setProfile(res.data.scout);
-          } catch {
-            setProfile(null);
-          }
+          } catch { setProfile(null); }
+        } else if (userData.role === "INSTITUTION") {
+          try {
+            const res = await api.request("/institutions/profile");
+            setProfile(res.data.institution);
+          } catch { setProfile(null); }
         }
 
-        Promise.allSettled([
-          api.getMyTeams({ per_page: 1 }),
-          api.getMyPlayerInvitations({ per_page: 1 }),
-          api.getMyTournaments({ per_page: 1 }),
-        ]).then(([teamsRes, invRes, tourRes]) => {
-          if (teamsRes.status === "fulfilled") setMyTeamsCount(teamsRes.value.total || 0);
-          if (invRes.status === "fulfilled") setInvitationsCount(invRes.value.total || 0);
-          if (tourRes.status === "fulfilled") setMyTournamentsCount(tourRes.value.total || 0);
+        // Role-conditional counts
+        const counts = [api.getMyTournaments({ per_page: 1 })];
+        if (userData.role === "PLAYER") {
+          counts.push(api.getMyTeams({ per_page: 1 }));
+          counts.push(api.getMyPlayerInvitations({ per_page: 1 }));
+        } else if (userData.role === "SCOUT") {
+          counts.push(api.getShortlist());
+        } else if (userData.role === "INSTITUTION") {
+          counts.push(api.getShortlist());
+        }
+
+        Promise.allSettled(counts).then((results) => {
+          let idx = 0;
+          if (results[idx]?.status === "fulfilled") {
+            setMyTournamentsCount(results[idx].value.total || 0);
+          }
+          idx++;
+          if (userData.role === "PLAYER") {
+            if (results[idx]?.status === "fulfilled") setMyTeamsCount(results[idx].value.total || 0);
+            idx++;
+            if (results[idx]?.status === "fulfilled") setInvitationsCount(results[idx].value.total || 0);
+          } else if (userData.role === "SCOUT" || userData.role === "INSTITUTION") {
+            if (results[idx]?.status === "fulfilled") {
+              setShortlistCount(results[idx].value.total || 0);
+            }
+          }
         });
 
         if (userData.role === "ADMIN") {
@@ -93,6 +113,7 @@ export default function DashboardPage() {
   const isPremium = subscription?.is_premium;
   const isPlayer = user?.role === "PLAYER";
   const isScout = user?.role === "SCOUT";
+  const isInstitution = user?.role === "INSTITUTION";
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -103,7 +124,13 @@ export default function DashboardPage() {
             Welcome back, {user?.email?.split("@")[0] || "User"}!
           </h1>
           <p className="text-white/60 mt-1">
-            {isAdmin ? "Admin Dashboard" : `${user?.role || "User"} Dashboard`}
+            {isAdmin
+              ? "Admin Dashboard"
+              : isScout
+              ? "Scout Dashboard"
+              : isInstitution
+              ? "Institution Dashboard"
+              : "Player Dashboard"}
           </p>
         </div>
 
@@ -117,109 +144,46 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!isPremium && !isAdmin && <PremiumCTA variant="banner" />}
+        {/* Premium CTA only for players */}
+        {isPlayer && !isPremium && <PremiumCTA variant="banner" />}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {isPlayer && (
             <>
-              <ActionCard
-                href="/dashboard/profile"
-                icon={User}
-                title="My Profile"
-                subtitle="View and edit your player profile"
-              />
-              <ActionCard
-                href="/dashboard/media"
-                icon={ImageIcon}
-                title="Highlights"
-                subtitle="Upload images, videos, and PDFs"
-              />
-              <ActionCard
-                href="/dashboard/teams"
-                icon={Shield}
-                title="My Teams"
-                subtitle={
-                  myTeamsCount === null
-                    ? "Teams you captain or join"
-                    : `${myTeamsCount} team${myTeamsCount !== 1 ? "s" : ""}`
-                }
-                badge={myTeamsCount}
-              />
-              <ActionCard
-                href="/dashboard/teams"
-                icon={Bell}
-                title="Invitations"
-                subtitle="Team invites and requests"
-                badge={invitationsCount}
-              />
-              <ActionCard
-                href="/tournaments"
-                icon={Calendar}
-                title="Tournaments"
-                subtitle="Browse and register for tournaments"
-              />
-              <ActionCard
-                href="/dashboard/organizer"
-                icon={Trophy}
-                title="My Tournaments"
-                subtitle={
-                  myTournamentsCount === null
-                    ? "Organize and manage tournaments"
-                    : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`
-                }
-                badge={myTournamentsCount}
-              />
+              <ActionCard href="/dashboard/profile" icon={User} title="My Profile" subtitle="View and edit your player profile" />
+              <ActionCard href="/dashboard/media" icon={ImageIcon} title="Highlights" subtitle="Upload images, videos, and PDFs" />
+              <ActionCard href="/dashboard/teams" icon={Shield} title="My Teams" subtitle={myTeamsCount === null ? "Teams you captain or join" : `${myTeamsCount} team${myTeamsCount !== 1 ? "s" : ""}`} badge={myTeamsCount} />
+              <ActionCard href="/dashboard/invitations" icon={Bell} title="Invitations" subtitle="Team invites and requests" badge={invitationsCount} />
+              <ActionCard href="/tournaments" icon={Calendar} title="Tournaments" subtitle="Browse and register for tournaments" />
+              <ActionCard href="/dashboard/organizer" icon={Trophy} title="My Tournaments" subtitle={myTournamentsCount === null ? "Organize and manage tournaments" : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`} badge={myTournamentsCount} />
             </>
           )}
 
           {isScout && (
             <>
-              <ActionCard
-                href="/dashboard/profile"
-                icon={User}
-                title="My Profile"
-                subtitle="View and edit your scout profile"
-              />
-              <ActionCard
-                href="/players"
-                icon={Users}
-                title="Find Players"
-                subtitle="Search for talented players"
-              />
-              <ActionCard
-                href="/dashboard/teams"
-                icon={Shield}
-                title="My Teams"
-                subtitle="Teams you captain or join"
-                badge={myTeamsCount}
-              />
-              <ActionCard
-                href="/tournaments"
-                icon={Trophy}
-                title="Tournaments"
-                subtitle="Discover talent at tournaments"
-              />
-              <ActionCard
-                href="/dashboard/organizer"
-                icon={Trophy}
-                title="My Tournaments"
-                subtitle={
-                  myTournamentsCount === null
-                    ? "Organize and manage tournaments"
-                    : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`
-                }
-                badge={myTournamentsCount}
-              />
+              <ActionCard href="/dashboard/profile" icon={User} title="My Scout Profile" subtitle="Manage your scout details, agency, and bio" />
+              <ActionCard href="/players" icon={Search} title="Find Players" subtitle="Search for talented players" />
+              <ActionCard href="/dashboard/shortlist" icon={Bookmark} title="Shortlist" subtitle={shortlistCount === 0 ? "Players you've saved" : `${shortlistCount} shortlisted player${shortlistCount !== 1 ? "s" : ""}`} badge={shortlistCount} />
+              <ActionCard href="/scouts" icon={Shield} title="Find Scouts" subtitle="Browse other scouts and agencies" />
+              <ActionCard href="/institutions" icon={Building2} title="Institutions" subtitle="Browse clubs, schools, and academies" />
+              <ActionCard href="/tournaments" icon={Calendar} title="Tournaments" subtitle="Browse tournaments to scout talent" />
+              <ActionCard href="/dashboard/organizer" icon={Trophy} title="My Tournaments" subtitle={myTournamentsCount === null ? "Create & manage your own tournaments" : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`} badge={myTournamentsCount} />
+            </>
+          )}
+
+          {isInstitution && (
+            <>
+              <ActionCard href="/dashboard/profile" icon={Building2} title="Institution Profile" subtitle="Manage your institution details" />
+              <ActionCard href="/players" icon={Search} title="Find Players" subtitle="Search for talented players" />
+              <ActionCard href="/dashboard/shortlist" icon={Bookmark} title="Shortlist" subtitle={shortlistCount === 0 ? "Players you've saved" : `${shortlistCount} shortlisted player${shortlistCount !== 1 ? "s" : ""}`} badge={shortlistCount} />
+              <ActionCard href="/scouts" icon={Users} title="Find Scouts" subtitle="Browse scouts and agencies" />
+              <ActionCard href="/tournaments" icon={Calendar} title="Tournaments" subtitle="Browse tournaments" />
+              <ActionCard href="/dashboard/organizer" icon={Trophy} title="My Tournaments" subtitle={myTournamentsCount === null ? "Create & manage tournaments" : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`} badge={myTournamentsCount} />
             </>
           )}
 
           {isAdmin && (
-            <ActionCard
-              href="/admin"
-              icon={Settings}
-              title="Admin Panel"
-              subtitle="Manage users, approvals, and content"
-            />
+            <ActionCard href="/admin" icon={Settings} title="Admin Panel" subtitle="Manage users, approvals, and content" />
           )}
         </div>
 
@@ -235,15 +199,18 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Bottom actions — subscription only for players */}
         {!isAdmin && (
           <div className="mb-8 flex flex-wrap gap-3">
-            <Link
-              href="/dashboard/subscription"
-              className="inline-flex items-center gap-2 rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A] hover:text-[#1C1928] transition"
-            >
-              <CreditCard className="w-4 h-4" />
-              {isPremium ? "Manage subscription" : "Upgrade to premium"}
-            </Link>
+            {isPlayer && (
+              <Link
+                href="/dashboard/subscription"
+                className="inline-flex items-center gap-2 rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A] hover:text-[#1C1928] transition"
+              >
+                <CreditCard className="w-4 h-4" />
+                {isPremium ? "Manage subscription" : "Upgrade to premium"}
+              </Link>
+            )}
             <Link
               href="/dashboard/settings"
               className="inline-flex items-center gap-2 rounded-md border border-white/20 text-white/80 px-5 py-2.5 text-sm font-medium hover:bg-white/5 transition"

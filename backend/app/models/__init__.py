@@ -14,6 +14,7 @@ from .admin_action import AdminAction
 from .organizer import OrganizerProfile
 from .organizer_payout import OrganizerPayout
 from .waitlist import WaitlistSignup
+from .saved_player import SavedPlayer
 
 __all__ = [
     'User', 'Role',
@@ -27,4 +28,5 @@ __all__ = [
     'OrganizerProfile',
     'OrganizerPayout',
     'WaitlistSignup',
+    'SavedPlayer',
 ]

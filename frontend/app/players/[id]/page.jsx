@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   ArrowLeft, MapPin, Calendar, Shield, Award, Mail, Phone,
   Globe, ChevronRight, Lock, Film, Image as ImageIcon, FileText, Star,
+  Bookmark, BookmarkCheck, Loader2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -20,9 +21,19 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [isScoutOrInst, setIsScoutOrInst] = useState(false);
+  const [isShortlisted, setIsShortlisted] = useState(false);
+  const [savingShortlist, setSavingShortlist] = useState(false);
 
   useEffect(() => {
-    setIsAuthed(api.isAuthenticated());
+    const authed = api.isAuthenticated();
+    setIsAuthed(authed);
+    if (authed) {
+      try {
+        const u = JSON.parse(localStorage.getItem("user") || "{}");
+        setIsScoutOrInst(u.role === "SCOUT" || u.role === "INSTITUTION");
+      } catch {}
+    }
   }, []);
 
   useEffect(() => {
@@ -44,6 +55,34 @@ export default function PlayerDetailPage() {
     };
     if (params.id) fetchAll();
   }, [params.id]);
+
+  useEffect(() => {
+    (async () => {
+      if (!isScoutOrInst || !player?.user_id) return;
+      try {
+        const res = await api.checkShortlist(player.user_id);
+        setIsShortlisted(res.saved);
+      } catch {}
+    })();
+  }, [isScoutOrInst, player?.user_id]);
+
+  const handleShortlist = async () => {
+    if (!player?.user_id) return;
+    setSavingShortlist(true);
+    try {
+      if (isShortlisted) {
+        await api.removeFromShortlist(player.user_id);
+        setIsShortlisted(false);
+      } else {
+        await api.addToShortlist(player.user_id);
+        setIsShortlisted(true);
+      }
+    } catch (e) {
+      alert(e.message || "Could not update shortlist");
+    } finally {
+      setSavingShortlist(false);
+    }
+  };
 
   const handleSeeFullDetails = () => {
     const redirect = encodeURIComponent(`/players/${params.id}`);
@@ -85,8 +124,12 @@ export default function PlayerDetailPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-8 pt-24 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Player Not Found</h1>
-          <p className="text-white/60 mb-6">{error || "The player you're looking for doesn't exist."}</p>
-          <Link href="/" className="text-[#D4AF6A] hover:underline">← Back home</Link>
+          <p className="text-white/60 mb-6">
+            {error || "The player you're looking for doesn't exist."}
+          </p>
+          <Link href="/" className="text-[#D4AF6A] hover:underline">
+            ← Back home
+          </Link>
         </div>
         <Footer />
       </div>
@@ -99,27 +142,23 @@ export default function PlayerDetailPage() {
     <div className="min-h-screen bg-[#1C1928]">
       <Navbar />
       <div className="container mx-auto px-4 py-8 pt-24">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-white/40 mb-6">
           <Link href="/" className="hover:text-white/60 transition">Home</Link>
           <ChevronRight className="w-4 h-4" />
-          {isAuthed ? (
+          {isAuthed && (
             <>
               <Link href="/players" className="hover:text-white/60 transition">Players</Link>
               <ChevronRight className="w-4 h-4" />
             </>
-          ) : null}
+          )}
           <span className="text-white/80">{player.full_name}</span>
         </div>
 
-        <Link
-          href={backHref}
-          className="inline-flex items-center gap-2 text-white/60 hover:text-white transition mb-6"
-        >
-          <ArrowLeft className="w-5 h-5" /> {backLabel}
+        <Link href={backHref} className="inline-flex items-center gap-2 text-white/60 hover:text-white transition mb-6">
+          <ArrowLeft className="w-5 h-5" />
+          {backLabel}
         </Link>
 
-        {/* Profile Card */}
         <div className="bg-[#242030] rounded-xl border border-white/10 overflow-hidden">
           <div className="flex flex-col md:flex-row">
             <div className="w-full md:w-1/3 bg-[#1C1928] relative">
@@ -175,6 +214,30 @@ export default function PlayerDetailPage() {
                 </div>
               </div>
 
+              {/* Shortlist button for scouts & institutions */}
+              {isScoutOrInst && !isGuestView && (
+                <div className="mt-4">
+                  <button
+                    onClick={handleShortlist}
+                    disabled={savingShortlist}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
+                      isShortlisted
+                        ? "bg-[#D4AF6A] text-[#1C1928] hover:bg-[#c9a45f]"
+                        : "border border-[#D4AF6A]/40 text-[#D4AF6A] hover:bg-[#D4AF6A]/10"
+                    } disabled:opacity-50`}
+                  >
+                    {savingShortlist ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : isShortlisted ? (
+                      <BookmarkCheck className="w-4 h-4" />
+                    ) : (
+                      <Bookmark className="w-4 h-4" />
+                    )}
+                    {isShortlisted ? "Shortlisted" : "Add to shortlist"}
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
                 {player.nationality && <InfoRow icon={Globe} label={player.nationality} />}
                 {player.current_team && <InfoRow icon={Award} label={player.current_team} />}
@@ -195,9 +258,7 @@ export default function PlayerDetailPage() {
                   <div className="flex items-start gap-3 rounded-lg bg-[#1C1928] border border-[#D4AF6A]/20 p-4">
                     <Lock className="w-5 h-5 text-[#D4AF6A] mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-white font-medium">
-                        Full profile &amp; media require an account
-                      </p>
+                      <p className="text-white font-medium">Full profile & media require an account</p>
                       <p className="text-white/60 text-sm mt-1">
                         Sign up free to see highlights, contact details, and more.
                       </p>
@@ -213,7 +274,7 @@ export default function PlayerDetailPage() {
               ) : (
                 <>
                   <div className="mt-6 pt-6 border-t border-white/10">
-                    <h3 className="text-white font-semibold mb-3">Highlights &amp; Media</h3>
+                    <h3 className="text-white font-semibold mb-3">Highlights & Media</h3>
                     {media.length === 0 ? (
                       <p className="text-white/40 text-sm">No media available yet.</p>
                     ) : (

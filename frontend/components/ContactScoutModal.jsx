@@ -30,11 +30,17 @@ export default function ContactScoutModal({ open, onClose, scoutName, reason }) 
         </div>
 
         <h2 className="text-white text-xl font-bold mb-2">
-          Premium feature
+          Premium required
         </h2>
         <p className="text-white/70 text-sm mb-5">
-          Contacting {scoutName ? <span className="text-white font-medium">{scoutName}</span> : "this scout"} requires a
-          premium account. Upgrade to unlock direct calls and WhatsApp messaging with verified scouts.
+          Contacting{" "}
+          {scoutName ? (
+            <span className="text-white font-medium">{scoutName}</span>
+          ) : (
+            "this profile"
+          )}{" "}
+          requires a premium player account. Upgrade to unlock direct calls and
+          WhatsApp messaging.
         </p>
 
         <div className="rounded-lg bg-[#1C1928] border border-white/10 p-4 mb-5 space-y-2 text-sm">

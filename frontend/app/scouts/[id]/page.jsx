@@ -20,22 +20,26 @@ export default function ScoutDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [role, setRole] = useState(null);
   const [isPremium, setIsPremium] = useState(false);
   const [contactInfo, setContactInfo] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  // Fetch fresh user state from backend — never trust localStorage
+  // Fetch fresh user state from backend
   useEffect(() => {
     const authed = api.isAuthenticated();
     setIsAuthed(authed);
-
     if (!authed) return;
 
     api
       .getMe()
-      .then((me) => setIsPremium(!!me.is_premium))
+      .then((me) => {
+        setRole(me.role);
+        setIsPremium(!!me.is_premium);
+      })
       .catch(() => {
         setIsAuthed(false);
+        setRole(null);
         setIsPremium(false);
       });
   }, []);
@@ -54,13 +58,20 @@ export default function ScoutDetailPage() {
     if (params.id) fetchScout();
   }, [params.id]);
 
+  // Free contact for scouts and institutions — only free players get gated
+  const canContactFree =
+    role === "SCOUT" ||
+    role === "INSTITUTION" ||
+    isPremium ||
+    (scout && scout.user_id === (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}").id : null));
+
   const handleContact = async (kind) => {
     if (!isAuthed) {
       const redirect = encodeURIComponent(`/scouts/${params.id}?intent=contact_scout`);
       router.push(`/login?redirect=${redirect}&intent=contact_scout`);
       return;
     }
-    if (!isPremium) {
+    if (!canContactFree) {
       setShowModal(true);
       return;
     }
@@ -126,13 +137,23 @@ export default function ScoutDetailPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-8 pt-24 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Scout Not Found</h1>
-          <p className="text-white/60 mb-6">{error || "The scout you're looking for doesn't exist."}</p>
-          <Link href="/" className="text-[#D4AF6A] hover:underline">← Back home</Link>
+          <p className="text-white/60 mb-6">
+            {error || "The scout you're looking for doesn't exist."}
+          </p>
+          <Link href="/" className="text-[#D4AF6A] hover:underline">
+            ← Back home
+          </Link>
         </div>
         <Footer />
       </div>
     );
   }
+
+  const contactHint = !isAuthed
+    ? "Log in to contact this scout."
+    : canContactFree
+    ? "Use the buttons below to reach out."
+    : "Premium account required to contact scouts.";
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -154,7 +175,8 @@ export default function ScoutDetailPage() {
           href={backHref}
           className="inline-flex items-center gap-2 text-white/60 hover:text-white transition mb-6"
         >
-          <ArrowLeft className="w-5 h-5" /> {backLabel}
+          <ArrowLeft className="w-5 h-5" />
+          {backLabel}
         </Link>
 
         <div className="bg-[#242030] rounded-xl border border-white/10 overflow-hidden">
@@ -162,12 +184,19 @@ export default function ScoutDetailPage() {
             <div className="w-full md:w-1/3 bg-[#1C1928] relative">
               <div className="aspect-square relative">
                 {scout.profile_picture_url ? (
-                  <Image src={scout.profile_picture_url} alt={scout.scout_name} fill className="object-cover" />
+                  <Image
+                    src={scout.profile_picture_url}
+                    alt={scout.scout_name}
+                    fill
+                    className="object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-[#2A2438]">
                     <div className="text-center">
                       <div className="w-24 h-24 mx-auto rounded-full bg-[#D4AF6A]/20 flex items-center justify-center mb-4">
-                        <span className="text-4xl text-[#D4AF6A]">{scout.scout_name?.charAt(0) || "S"}</span>
+                        <span className="text-4xl text-[#D4AF6A]">
+                          {scout.scout_name?.charAt(0) || "S"}
+                        </span>
                       </div>
                       <p className="text-white/40 text-sm">No image available</p>
                     </div>
@@ -230,13 +259,7 @@ export default function ScoutDetailPage() {
                     <MessageCircle className="w-4 h-4" /> WhatsApp
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-white/40">
-                  {isAuthed && isPremium
-                    ? "You have premium access."
-                    : isAuthed
-                    ? "Premium account required to contact scouts."
-                    : "Log in with a premium account to contact scouts."}
-                </p>
+                <p className="mt-2 text-xs text-white/40">{contactHint}</p>
               </div>
             </div>
           </div>

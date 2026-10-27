@@ -62,17 +62,17 @@ export default function ScoutOnboarding() {
     };
 
     try {
-      // Try update first (in case profile exists)
+      // Try create first (fresh signup — 99% of cases)
       let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scouts/profile`, {
-        method: "PUT",
+        method: "POST",
         headers: authHeaders,
         body: JSON.stringify(payload),
       });
 
-      // If no profile yet, create it
-      if (res.status === 404) {
+      // If a profile already exists (retry), fall back to update
+      if (res.status === 409) {
         res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scouts/profile`, {
-          method: "POST",
+          method: "PUT",
           headers: authHeaders,
           body: JSON.stringify(payload),
         });

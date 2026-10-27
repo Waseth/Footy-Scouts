@@ -43,15 +43,28 @@ function SubscriptionContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [subscription, setSubscription] = useState(null);
+  const [roleChecked, setRoleChecked] = useState(false);
 
+  // Gate: only PLAYER accounts can access subscription plans.
   useEffect(() => {
     (async () => {
       try {
-        const data = await api.getMySubscription();
-        setSubscription(data.subscription);
-      } catch { }
+        const me = await api.getMe();
+        if (me?.role !== "PLAYER") {
+          // Scouts, institutions, admins have no premium tier
+          router.replace("/dashboard");
+          return;
+        }
+        setRoleChecked(true);
+        try {
+          const data = await api.getMySubscription();
+          setSubscription(data.subscription);
+        } catch {}
+      } catch {
+        router.replace("/login");
+      }
     })();
-  }, []);
+  }, [router]);
 
   const handleUpgrade = async () => {
     setError("");
@@ -64,6 +77,14 @@ function SubscriptionContent() {
       setLoading(false);
     }
   };
+
+  if (!roleChecked) {
+    return (
+      <div className="min-h-screen bg-[#1C1928] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#D4AF6A] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -93,10 +114,11 @@ function SubscriptionContent() {
                 key={key}
                 type="button"
                 onClick={() => setPlan(key)}
-                className={`text-left rounded-2xl border p-6 transition ${selected
+                className={`text-left rounded-2xl border p-6 transition ${
+                  selected
                     ? "border-[#D4AF6A] bg-[#D4AF6A]/10 shadow-lg shadow-[#D4AF6A]/10"
                     : "border-white/10 bg-[#242030] hover:border-[#D4AF6A]/40"
-                  }`}
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-white text-lg font-semibold">{p.name}</h3>
@@ -147,9 +169,7 @@ function SubscriptionContent() {
             )}
           </button>
           <p className="mt-3 text-xs text-white/40">
-            
-              Secure checkout. Cards, mobile money, and bank transfers accepted.
-
+            Secure checkout. Cards, mobile money, and bank transfers accepted.
           </p>
           <Link href="/dashboard" className="block mt-6 text-sm text-white/60 hover:text-white">
             ← Back to dashboard
