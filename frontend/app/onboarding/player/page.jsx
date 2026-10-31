@@ -236,7 +236,7 @@ export default function PlayerOnboarding() {
       }
 
       setProgress(100);
-      setTimeout(() => router.push("/dashboard"), 400);
+      setTimeout(() => router.push("/"), 400);
     } catch (err) {
       setError(err.message || "Something went wrong");
       setSubmitting(false);

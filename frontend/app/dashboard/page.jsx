@@ -6,12 +6,12 @@ import Link from "next/link";
 import {
   User, Trophy, Users, Calendar, CreditCard, Settings,
   LogOut, Image as ImageIcon, Shield, Bell, Building2, Search, Bookmark,
+  Loader2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProfileCompleteness from "@/components/ProfileCompleteness";
-import PremiumCTA from "@/components/PremiumCTA";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -21,8 +21,6 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [myTeamsCount, setMyTeamsCount] = useState(null);
-  const [invitationsCount, setInvitationsCount] = useState(0);
   const [myTournamentsCount, setMyTournamentsCount] = useState(null);
   const [shortlistCount, setShortlistCount] = useState(0);
 
@@ -30,6 +28,13 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         const userData = await api.getMe();
+
+        // Players live on the homepage now — not the dashboard
+        if (userData.role === "PLAYER") {
+          router.replace("/");
+          return;
+        }
+
         setUser(userData);
         setIsAdmin(userData.role === "ADMIN");
 
@@ -38,12 +43,7 @@ export default function DashboardPage() {
           setSubscription(subData.subscription);
         } catch {}
 
-        if (userData.role === "PLAYER") {
-          try {
-            const res = await api.request("/players/profile");
-            setProfile(res.data.player);
-          } catch { setProfile(null); }
-        } else if (userData.role === "SCOUT") {
+        if (userData.role === "SCOUT") {
           try {
             const res = await api.request("/scouts/profile");
             setProfile(res.data.scout);
@@ -55,31 +55,17 @@ export default function DashboardPage() {
           } catch { setProfile(null); }
         }
 
-        // Role-conditional counts
         const counts = [api.getMyTournaments({ per_page: 1 })];
-        if (userData.role === "PLAYER") {
-          counts.push(api.getMyTeams({ per_page: 1 }));
-          counts.push(api.getMyPlayerInvitations({ per_page: 1 }));
-        } else if (userData.role === "SCOUT") {
-          counts.push(api.getShortlist());
-        } else if (userData.role === "INSTITUTION") {
+        if (userData.role === "SCOUT" || userData.role === "INSTITUTION") {
           counts.push(api.getShortlist());
         }
 
         Promise.allSettled(counts).then((results) => {
-          let idx = 0;
-          if (results[idx]?.status === "fulfilled") {
-            setMyTournamentsCount(results[idx].value.total || 0);
+          if (results[0]?.status === "fulfilled") {
+            setMyTournamentsCount(results[0].value.total || 0);
           }
-          idx++;
-          if (userData.role === "PLAYER") {
-            if (results[idx]?.status === "fulfilled") setMyTeamsCount(results[idx].value.total || 0);
-            idx++;
-            if (results[idx]?.status === "fulfilled") setInvitationsCount(results[idx].value.total || 0);
-          } else if (userData.role === "SCOUT" || userData.role === "INSTITUTION") {
-            if (results[idx]?.status === "fulfilled") {
-              setShortlistCount(results[idx].value.total || 0);
-            }
+          if (results[1]?.status === "fulfilled") {
+            setShortlistCount(results[1].value.total || 0);
           }
         });
 
@@ -102,16 +88,14 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-[#1C1928] flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <Loader2 className="w-8 h-8 text-[#D4AF6A] animate-spin" />
       </div>
     );
   }
 
-  const isPremium = subscription?.is_premium;
-  const isPlayer = user?.role === "PLAYER";
   const isScout = user?.role === "SCOUT";
   const isInstitution = user?.role === "INSTITUTION";
 
@@ -130,11 +114,11 @@ export default function DashboardPage() {
               ? "Scout Dashboard"
               : isInstitution
               ? "Institution Dashboard"
-              : "Player Dashboard"}
+              : "Dashboard"}
           </p>
         </div>
 
-        {(isPlayer || isScout) && (
+        {isScout && (
           <div className="mb-8">
             <ProfileCompleteness
               profile={profile || {}}
@@ -144,21 +128,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Premium CTA only for players */}
-        {isPlayer && !isPremium && <PremiumCTA variant="banner" />}
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {isPlayer && (
-            <>
-              <ActionCard href="/dashboard/profile" icon={User} title="My Profile" subtitle="View and edit your player profile" />
-              <ActionCard href="/dashboard/media" icon={ImageIcon} title="Highlights" subtitle="Upload images, videos, and PDFs" />
-              <ActionCard href="/dashboard/teams" icon={Shield} title="My Teams" subtitle={myTeamsCount === null ? "Teams you captain or join" : `${myTeamsCount} team${myTeamsCount !== 1 ? "s" : ""}`} badge={myTeamsCount} />
-              <ActionCard href="/dashboard/invitations" icon={Bell} title="Invitations" subtitle="Team invites and requests" badge={invitationsCount} />
-              <ActionCard href="/tournaments" icon={Calendar} title="Tournaments" subtitle="Browse and register for tournaments" />
-              <ActionCard href="/dashboard/organizer" icon={Trophy} title="My Tournaments" subtitle={myTournamentsCount === null ? "Organize and manage tournaments" : `${myTournamentsCount} tournament${myTournamentsCount !== 1 ? "s" : ""}`} badge={myTournamentsCount} />
-            </>
-          )}
-
           {isScout && (
             <>
               <ActionCard href="/dashboard/profile" icon={User} title="My Scout Profile" subtitle="Manage your scout details, agency, and bio" />
@@ -199,18 +169,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Bottom actions — subscription only for players */}
         {!isAdmin && (
           <div className="mb-8 flex flex-wrap gap-3">
-            {isPlayer && (
-              <Link
-                href="/dashboard/subscription"
-                className="inline-flex items-center gap-2 rounded-md border border-[#D4AF6A]/40 text-[#D4AF6A] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A] hover:text-[#1C1928] transition"
-              >
-                <CreditCard className="w-4 h-4" />
-                {isPremium ? "Manage subscription" : "Upgrade to premium"}
-              </Link>
-            )}
             <Link
               href="/dashboard/settings"
               className="inline-flex items-center gap-2 rounded-md border border-white/20 text-white/80 px-5 py-2.5 text-sm font-medium hover:bg-white/5 transition"

@@ -58,64 +58,72 @@ export default function FAQ() {
   const [open, setOpen] = useState(null);
 
   return (
-    <section className="container mx-auto px-4 py-12 md:py-20 border-t border-white/5">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 md:mb-12 text-center">
-          <span className="text-[#D4AF6A] mb-2 md:mb-3 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">
-            Frequently Asked
-          </span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3">
-            Questions & answers
-          </h2>
-          <p className="text-white/60 text-sm md:text-base max-w-xl mx-auto">
-            Everything you need to know about Footy Scouts.
-          </p>
-        </div>
+    <section
+      className="relative w-full border-t border-white/5 bg-cover bg-center bg-no-repeat bg-fixed"
+      style={{ backgroundImage: "url('/faq-bg.jpg')" }}
+    >
+      {/* Dark overlay for readability on all screens */}
+      <div className="absolute inset-0 bg-[#1C1928]/85 md:bg-[#1C1928]/80 backdrop-blur-[2px]" />
 
-        <div className="space-y-2">
-          {FAQS.map((item, i) => {
-            const isOpen = open === i;
-            return (
-              <div
-                key={i}
-                className="rounded-lg border border-white/10 bg-[#242030] overflow-hidden transition-colors"
-              >
-                <button
-                  onClick={() => setOpen(isOpen ? null : i)}
-                  className="w-full flex items-center justify-between gap-3 p-4 md:p-5 text-left hover:bg-[#1C1928]/50 transition"
-                  aria-expanded={isOpen}
+      <div className="relative z-10 container mx-auto px-4 py-12 md:py-20">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-8 md:mb-12 text-center">
+            <span className="text-[#D4AF6A] mb-2 md:mb-3 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">
+              Frequently Asked
+            </span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3">
+              Questions & answers
+            </h2>
+            <p className="text-white/60 text-sm md:text-base max-w-xl mx-auto">
+              Everything you need to know about Footy Scouts.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {FAQS.map((item, i) => {
+              const isOpen = open === i;
+              return (
+                <div
+                  key={i}
+                  className="rounded-lg border border-white/10 bg-[#242030]/95 overflow-hidden transition-colors"
                 >
-                  <span className="text-white font-medium text-sm md:text-base">
-                    {item.q}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 md:w-5 md:h-5 text-[#D4AF6A] shrink-0 transition-transform ${
-                      isOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="px-4 md:px-5 pb-4 md:pb-5 -mt-1">
-                    <p className="text-white/60 text-sm leading-relaxed">
-                      {item.a}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <button
+                    onClick={() => setOpen(isOpen ? null : i)}
+                    className="w-full flex items-center justify-between gap-3 p-4 md:p-5 text-left hover:bg-[#1C1928]/50 transition"
+                    aria-expanded={isOpen}
+                  >
+                    <span className="text-white font-medium text-sm md:text-base">
+                      {item.q}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 md:w-5 md:h-5 text-[#D4AF6A] shrink-0 transition-transform ${
+                        isOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 md:px-5 pb-4 md:pb-5 -mt-1">
+                      <p className="text-white/60 text-sm leading-relaxed">
+                        {item.a}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-        <div className="mt-8 md:mt-12 text-center">
-          <p className="text-white/60 text-sm mb-3">
-            Still have questions?
-          </p>
-          <a
-            href="/contact"
-            className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
-          >
-            Contact us
-          </a>
+          <div className="mt-8 md:mt-12 text-center">
+            <p className="text-white/60 text-sm mb-3">
+              Still have questions?
+            </p>
+            <a
+              href="/contact"
+              className="inline-flex items-center gap-2 rounded-md bg-[#D4AF6A] text-[#1C1928] px-5 py-2.5 text-sm font-medium hover:bg-[#D4AF6A]/90 transition"
+            >
+              Contact us
+            </a>
+          </div>
         </div>
       </div>
     </section>

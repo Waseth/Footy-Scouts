@@ -49,7 +49,7 @@ export default function CreateTournamentPage() {
     required_teams: 8,
     min_players_per_team: 5,
     max_players_per_team: 8,
-    team_entry_fee: "",   // ← blank by default
+    team_entry_fee: "",
     fee_currency: "KES",
     start_date: "",
     end_date: "",
@@ -60,6 +60,13 @@ export default function CreateTournamentPage() {
     (async () => {
       try {
         const me = await api.getMe();
+
+        // ── Only scouts, institutions, and admins can create tournaments ──
+        if (me.role === "PLAYER") {
+          router.replace("/tournaments");
+          return;
+        }
+
         setUser(me);
         setForm((prev) => ({
           ...prev,
@@ -205,7 +212,6 @@ export default function CreateTournamentPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic info */}
           <div className="rounded-2xl border border-white/10 bg-[#242030] p-6">
             <h2 className="text-white font-semibold text-lg mb-4">Tournament details</h2>
             <div className="space-y-4">
@@ -256,7 +262,6 @@ export default function CreateTournamentPage() {
             </div>
           </div>
 
-          {/* Organizer */}
           <div className="rounded-2xl border border-white/10 bg-[#242030] p-6">
             <h2 className="text-white font-semibold text-lg mb-4">Organizer</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -303,7 +308,6 @@ export default function CreateTournamentPage() {
             </div>
           </div>
 
-          {/* Team requirements */}
           <div className="rounded-2xl border border-white/10 bg-[#242030] p-6">
             <h2 className="text-white font-semibold text-lg mb-4">Team requirements</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -344,7 +348,6 @@ export default function CreateTournamentPage() {
             </div>
           </div>
 
-          {/* Fees */}
           <div className="rounded-2xl border border-[#D4AF6A]/30 bg-[#242030] p-6">
             <h2 className="text-white font-semibold text-lg mb-1">Entry fee</h2>
             <p className="text-white/50 text-xs mb-4">
@@ -399,7 +402,6 @@ export default function CreateTournamentPage() {
             )}
           </div>
 
-          {/* Dates */}
           <div className="rounded-2xl border border-white/10 bg-[#242030] p-6">
             <h2 className="text-white font-semibold text-lg mb-4">Dates</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

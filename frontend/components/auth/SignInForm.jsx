@@ -20,7 +20,7 @@ export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo = searchParams.get("redirect") || null;
   const intent = searchParams.get("intent");
 
   const [showPassword, setShowPassword] = useState(false);
@@ -31,6 +31,7 @@ export default function SignInForm() {
   const [errors, setErrors] = useState({ email: "", password: "", general: "" });
 
   const buildRedirectUrl = () => {
+    if (!redirectTo) return null;
     if (!intent) return redirectTo;
     const sep = redirectTo.includes("?") ? "&" : "?";
     return `${redirectTo}${sep}intent=${encodeURIComponent(intent)}`;
@@ -72,7 +73,23 @@ export default function SignInForm() {
         if (data.data.user) {
           localStorage.setItem("user", JSON.stringify(data.data.user));
         }
-        router.push(buildRedirectUrl());
+
+        const role = data.data.user?.role;
+        const explicitRedirect = buildRedirectUrl();
+
+        // Priority:
+        //   1. Explicit ?redirect= (deep links) — but never for admins
+        //   2. Role-based landing
+        if (explicitRedirect && role !== "ADMIN") {
+          router.push(explicitRedirect);
+        } else if (role === "ADMIN") {
+          router.push("/admin");
+        } else if (role === "PLAYER") {
+          router.push("/");
+        } else {
+          // SCOUT / INSTITUTION / anyone else
+          router.push("/dashboard");
+        }
       } else {
         if (data.error === "Invalid email or password") {
           setErrors((prev) => ({

@@ -74,10 +74,6 @@ def _parse_date(raw):
 
 
 def _serialize_entry(entry, include_payment=False):
-    """
-    Serialize a TournamentTeam for the organizer/admin view.
-    When include_payment=True, embed the linked Payment's key fields.
-    """
     team = entry.team
     data = {
         'id': entry.id,
@@ -162,8 +158,6 @@ def get_tournament(tournament_id):
 
     data = {'tournament': tournament.to_dict()}
 
-    # Teams list — organizer/admin see every entry with payment details.
-    # Public/captains see only REGISTERED entries.
     if can_manage:
         entries = tournament.tournament_teams.order_by(
             TournamentTeam.created_at.desc()
@@ -223,7 +217,22 @@ def get_tournament(tournament_id):
 @tournaments_bp.route('', methods=['POST'])
 @jwt_required()
 def create_tournament():
+    """
+    Create a tournament in DRAFT state.
+
+    Only SCOUT, INSTITUTION, and ADMIN roles can create tournaments.
+    PLAYER accounts cannot organize — they can only request to join with a team.
+    """
     user = get_current_user()
+
+    # 🆕 Role guard — players cannot organize tournaments
+    if user.role_name == 'PLAYER':
+        return error_response(
+            "Players cannot create tournaments. Only scouts, institutions, and admins can organize.",
+            403,
+            errors={'code': 'ROLE_NOT_ALLOWED'},
+        )
+
     _ensure_organizer_profile(user)
 
     data = request.get_json() or {}
@@ -535,7 +544,7 @@ def invite_team(tournament_id):
 
 
 # ─────────────────────────────────────────────────────────────
-#  Approve / Reject
+#  Approve / Reject a team's join request (organizer side)
 # ─────────────────────────────────────────────────────────────
 
 @tournaments_bp.route('/<tournament_id>/teams/<entry_id>/approve', methods=['POST'])
@@ -728,7 +737,7 @@ def close_registration(tournament_id):
             organizer_user_id=user.id,
             payout_code=payout_code,
             gross_collected=gross,
-            platform_fee=platform,
+            platform_fee_deducted=platform,
             net_to_organizer=net,
             status=OrganizerPayout.STATUS_PENDING,
         )

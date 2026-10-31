@@ -166,6 +166,16 @@ class ApiService {
     return result.data;
   }
 
+  async getFeaturedPlayers(limit = 3) {
+    const query = new URLSearchParams();
+    query.append("is_featured", "true");
+    query.append("is_premium", "true");
+    query.append("page", "1");
+    query.append("per_page", String(limit));
+    const result = await this.request(`/search/players?${query.toString()}`);
+    return result.data;
+  }
+
   async getPlayer(id) {
     const result = await this.request(`/players/${id}`);
     return result.data.player;
