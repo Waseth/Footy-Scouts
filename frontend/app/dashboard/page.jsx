@@ -201,7 +201,7 @@ function ActionCard({ href, icon: Icon, title, subtitle, badge }) {
       className="relative bg-[#242030] rounded-lg p-6 border border-white/10 hover:border-[#D4AF6A]/50 hover:shadow-lg hover:shadow-[#D4AF6A]/5 transition-all"
     >
       {badge > 0 && (
-        <span className="absolute top-3 right-3 bg-[#D4AF6A] text-[#1C1928] text-[10px] font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+        <span className="absolute top-3 right-3 bg-[#D4AF6A] text-[#1C1928] text-[10px] font-bold rounded-full min-w-5 h-5 px-1.5 flex items-center justify-center">
           {badge > 99 ? "99+" : badge}
         </span>
       )}

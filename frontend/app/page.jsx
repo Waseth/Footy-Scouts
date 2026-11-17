@@ -152,7 +152,7 @@ function GuestHome() {
         }}
       >
         <div className="absolute inset-0 bg-[#1C1928]/65 md:bg-[#1C1928]/55" />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#1C1928]" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-[#1C1928]" />
 
         <div className="relative z-10 mx-auto max-w-4xl text-center px-4 py-16 sm:py-20 md:py-24">
           <span className="text-[#D4AF6A] mb-3 md:mb-4 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">
@@ -333,7 +333,7 @@ function LoggedInHome() {
 
       {/* ═══ HERO ═══ */}
       <section
-        className="relative min-h-[55vh] sm:min-h-[60vh] md:min-h-[65vh] flex items-center justify-center border-b border-white/5"
+        className="relative min-h-[55vh] sm:min-h-[60vh] md:min-h-[65vh] flex items-center justify-center "
         style={{
           backgroundImage: "url('/hero-bg.jpg')",
           backgroundSize: "cover",
@@ -342,7 +342,7 @@ function LoggedInHome() {
         }}
       >
         <div className="absolute inset-0 bg-[#1C1928]/70 md:bg-[#1C1928]/60" />
-        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-[#1C1928]" />
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent to-[#1C1928]" />
 
         <div className="relative z-10 mx-auto max-w-4xl text-center px-4 py-14 sm:py-16 md:py-20">
           <p className="text-[#D4AF6A] mb-2 md:mb-3 inline-block text-xs md:text-sm font-semibold uppercase tracking-[0.2em]">

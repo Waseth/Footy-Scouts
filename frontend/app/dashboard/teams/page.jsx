@@ -38,6 +38,10 @@ export default function TeamsHubPage() {
       const me = await api.getMe();
       setUser(me);
 
+      // Teams are a player feature
+      const mePlayer = me?.role === "PLAYER" || !!me?.player_profile;
+      if (!mePlayer) return;
+
       const [teamsRes, availableRes, invRes, jrRes] = await Promise.allSettled([
         api.getMyTeams({ per_page: 50 }),
         api.getAvailableTeams({ per_page: 30 }),
@@ -144,8 +148,30 @@ export default function TeamsHubPage() {
     );
   }
 
-  const canCreateTeam = !!user?.player_profile || user?.role === "PLAYER";
+  // const canCreateTeam = !!user?.player_profile || user?.role === "PLAYER";
+  // const pendingInvitesCount = invites.length;
+
+  const isPlayer = user?.role === "PLAYER" || !!user?.player_profile;
+  const canCreateTeam = isPlayer;
   const pendingInvitesCount = invites.length;
+
+  if (!isPlayer) {
+    return (
+      <div className="min-h-screen bg-[#1C1928]">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 pt-24 max-w-6xl">
+          <EmptyState
+            icon={Shield}
+            title="Teams are for players"
+            body="Creating teams, receiving invitations and requesting to join are only available to player accounts."
+            actionHref="/dashboard"
+            actionLabel="Go to dashboard"
+          />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#1C1928]">
@@ -180,21 +206,19 @@ export default function TeamsHubPage() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`relative inline-flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  active
-                    ? "bg-[#D4AF6A] text-[#1C1928]"
-                    : "border border-white/10 text-white/60 hover:border-[#D4AF6A]/40 hover:text-white"
-                }`}
+                className={`relative inline-flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${active
+                  ? "bg-[#D4AF6A] text-[#1C1928]"
+                  : "border border-white/10 text-white/60 hover:border-[#D4AF6A]/40 hover:text-white"
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 {t.label}
                 {count > 0 && (
                   <span
-                    className={`ml-1 text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${
-                      active
-                        ? "bg-[#1C1928] text-[#D4AF6A]"
-                        : "bg-[#D4AF6A] text-[#1C1928]"
-                    }`}
+                    className={`ml-1 text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${active
+                      ? "bg-[#1C1928] text-[#D4AF6A]"
+                      : "bg-[#D4AF6A] text-[#1C1928]"
+                      }`}
                   >
                     {count}
                   </span>
@@ -218,8 +242,8 @@ export default function TeamsHubPage() {
                 icon={Users}
                 title="No teams yet"
                 body="You don't captain or play on any teams yet."
-                actionHref={canCreateTeam ? "/teams/create" : "/onboarding/player"}
-                actionLabel={canCreateTeam ? "Create your first team" : "Complete player onboarding"}
+                actionHref="/teams/create" 
+                actionLabel="Create your first team"
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -286,9 +310,8 @@ export default function TeamsHubPage() {
                           </div>
                           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                isFull ? "bg-red-500" : "bg-[#D4AF6A]"
-                              }`}
+                              className={`h-full rounded-full ${isFull ? "bg-red-500" : "bg-[#D4AF6A]"
+                                }`}
                               style={{
                                 width: `${Math.min(
                                   100,

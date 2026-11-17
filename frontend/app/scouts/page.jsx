@@ -102,14 +102,14 @@ export default function ScoutsPage() {
                   onChange={setScoutType}
                   options={scoutTypeOptions}
                   placeholder="All Types"
-                  className="flex-1 min-w-[120px] max-w-[160px] sm:max-w-[180px]"
+                  className="flex-1 min-w-30 max-w-40 sm:max-w-45"
                 />
                 <input
                   type="text"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   placeholder="Country"
-                  className="flex-1 min-w-[100px] max-w-[140px] sm:max-w-[160px] px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
+                  className="flex-1 min-w-25 max-w-35 sm:max-w-40 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-[#1C1928] border border-white/10 text-white placeholder:text-white/40 focus:border-[#D4AF6A]/60 outline-none transition text-sm sm:text-base"
                 />
                 <button
                   type="submit"
@@ -164,7 +164,7 @@ export default function ScoutsPage() {
                 className="bg-[#242030] rounded-lg p-4 sm:p-5 border border-white/10 hover:border-[#D4AF6A]/50 transition group"
               >
                 <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] text-lg sm:text-xl font-bold overflow-hidden flex-shrink-0">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] text-lg sm:text-xl font-bold overflow-hidden shrink-0">
                     {scout.profile_picture_url ? (
                       <Image src={scout.profile_picture_url} alt={scout.scout_name} width={56} height={56} className="w-full h-full object-cover" />
                     ) : (
@@ -177,7 +177,7 @@ export default function ScoutsPage() {
                     </h3>
                     <div className="flex items-center gap-2 text-xs sm:text-sm text-white/60 truncate">
                       {scout.scout_type === 'AGENCY' ? scout.agency_name : 'Independent Scout'}
-                      {scout.is_verified && <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4 text-[#D4AF6A] flex-shrink-0" />}
+                      {scout.is_verified && <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4 text-[#D4AF6A] shrink-0" />}
                     </div>
                   </div>
                 </div>

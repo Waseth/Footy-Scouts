@@ -233,7 +233,7 @@ def seed_demo_data(app):
             tournament_name=t["tournament_name"],
             tournament_type=t["tournament_type"],
             location=t["location"],
-            registration_fee=1000,
+            # registration_fee=1000,
             fee_currency="KES",
             description=f"Demo tournament: {t['tournament_name']}.",
             start_date=t["start_date"],
