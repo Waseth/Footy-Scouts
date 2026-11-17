@@ -89,16 +89,23 @@ class Player(db.Model):
         # Registered users get "full details" (still not contact info)
         if viewer_is_authenticated:
             data.update({
+                'user_id': self.user_id,
                 'age': self.age,
                 'gender': self.gender,
                 'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
                 'school': self.school,
             })
 
-        # Owner or explicit override → contact info
-        if is_owner or include_contact:
+        viewer_is_scout_or_inst = bool(
+            viewer_is_authenticated
+            and viewer.is_approved
+            and viewer is not None
+            and (viewer.has_scout_capability() or viewer.has_institution_capability())
+        )
+
+        # Owner or explicit override, or a scout/institution viewing a player who allows it
+        if is_owner or include_contact or (viewer_is_scout_or_inst and self.show_contact):
             data.update({
-                'user_id': self.user_id,
                 'contact_number': self.contact_number,
                 'email': self.user.email if self.user else None,
                 'show_contact': bool(self.show_contact),

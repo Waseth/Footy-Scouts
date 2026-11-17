@@ -296,6 +296,9 @@ def add_to_shortlist(player_user_id):
     if user.id == player_user_id:
         return error_response("You cannot shortlist yourself", 400)
 
+    if not (user.has_scout_capability() or user.has_institution_capability()):
+        return error_response("Only scouts and institutions can shortlist players", 403)
+
     target = db.session.get(User, player_user_id)
     if not target:
         return error_response("Player not found", 404)
@@ -326,6 +329,8 @@ def add_to_shortlist(player_user_id):
 @jwt_required()
 def remove_from_shortlist(player_user_id):
     user = get_current_user()
+    if not (user.has_scout_capability() or user.has_institution_capability()):
+        return error_response("Only scouts and institutions can remove shortlisted players", 403)
     row = SavedPlayer.query.filter_by(
         user_id=user.id, player_user_id=player_user_id,
     ).first()
@@ -341,6 +346,8 @@ def remove_from_shortlist(player_user_id):
 @jwt_required()
 def check_shortlist(player_user_id):
     user = get_current_user()
+    if not (user.has_scout_capability() or user.has_institution_capability()):
+        return error_response("Only scouts and institutions can check shortlist", 403)
     exists = SavedPlayer.query.filter_by(
         user_id=user.id, player_user_id=player_user_id,
     ).first() is not None

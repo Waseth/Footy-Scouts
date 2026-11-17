@@ -124,13 +124,19 @@ export default function ShortlistPage() {
                     {[p.current_team, p.nationality].filter(Boolean).join(" · ") || "—"}
                   </p>
                   <div className="flex gap-2">
-                    <Link
-                      href={`/players/${item.player_user_id}`}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#D4AF6A]/15 text-[#D4AF6A] px-3 py-1.5 text-xs font-medium hover:bg-[#D4AF6A]/25 transition"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      View profile
-                    </Link>
+                    {p.id ? (
+                      <Link
+                        href={`/players/${p.id}`}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#D4AF6A]/15 text-[#D4AF6A] px-3 py-1.5 text-xs font-medium hover:bg-[#D4AF6A]/25 transition"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View profile
+                      </Link>
+                    ) : (
+                      <span className="flex-1 text-center text-xs text-white/30 py-1.5">
+                        Profile unavailable
+                      </span>
+                    )}
                     <button
                       onClick={() => handleRemove(item.player_user_id)}
                       disabled={removing === item.player_user_id}

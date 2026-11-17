@@ -32,7 +32,8 @@ export default function PlayerDetailPage() {
       try {
         const u = JSON.parse(localStorage.getItem("user") || "{}");
         setIsScoutOrInst(u.role === "SCOUT" || u.role === "INSTITUTION");
-      } catch {}
+        console.log(isScoutOrInst);
+      } catch { }
     }
   }, []);
 
@@ -62,12 +63,16 @@ export default function PlayerDetailPage() {
       try {
         const res = await api.checkShortlist(player.user_id);
         setIsShortlisted(res.saved);
-      } catch {}
+      } catch { }
     })();
   }, [isScoutOrInst, player?.user_id]);
 
   const handleShortlist = async () => {
-    if (!player?.user_id) return;
+    if (!player?.user_id) {
+      console.error("Player payload has no user_id:", player);
+      alert("Could not shortlist: player data is missing a user id.");
+      return;
+    };
     setSavingShortlist(true);
     try {
       if (isShortlisted) {
@@ -220,11 +225,10 @@ export default function PlayerDetailPage() {
                   <button
                     onClick={handleShortlist}
                     disabled={savingShortlist}
-                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
-                      isShortlisted
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${isShortlisted
                         ? "bg-[#D4AF6A] text-[#1C1928] hover:bg-[#c9a45f]"
                         : "border border-[#D4AF6A]/40 text-[#D4AF6A] hover:bg-[#D4AF6A]/10"
-                    } disabled:opacity-50`}
+                      } disabled:opacity-50`}
                   >
                     {savingShortlist ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

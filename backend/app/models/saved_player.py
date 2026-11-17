@@ -38,20 +38,24 @@ class SavedPlayer(db.Model):
         Index('idx_saved_players_player', 'player_user_id'),
     )
 
+    # Two FKs point at users, so the relationship must say which one
+    player_user = db.relationship('User', foreign_keys=[player_user_id])
+
     def to_dict(self):
-        player = getattr(self, 'player_user', None)
-        player_profile = getattr(player, 'player_profile', None) if player else None
+        player = self.player_user
+        profile = player.player_profile if player else None
         return {
             'id': self.id,
             'player_user_id': self.player_user_id,
             'note': self.note,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'player': {
-                'full_name': player_profile.full_name if player_profile else None,
-                'position': player_profile.position if player_profile else None,
-                'nationality': player_profile.nationality if player_profile else None,
-                'age': player_profile.age if player_profile else None,
-                'profile_picture_url': player_profile.profile_picture_url if player_profile else None,
-                'current_team': player_profile.current_team if player_profile else None,
-            } if player_profile else None,
+                'id': profile.id,   # profile id, which /players/<id> expects
+                'full_name': profile.full_name,
+                'position': profile.position,
+                'nationality': profile.nationality,
+                'age': profile.age,
+                'profile_picture_url': profile.profile_picture_url,
+                'current_team': profile.current_team,
+            } if profile else None,
         }
