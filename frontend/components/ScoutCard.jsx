@@ -8,7 +8,7 @@ export default function ScoutCard({ scout }) {
   return (
     <Link
       href={`/scouts/${scout.id}`}
-      className="group bg-[#242030] rounded-lg p-5 border border-white/10 hover:border-[#D4AF6A]/50 transition-all hover:shadow-lg hover:shadow-[#D4AF6A]/5"
+      className="group block bg-[#242030] rounded-lg p-5 border border-white/10 hover:border-[#D4AF6A]/50 transition-all hover:shadow-lg hover:shadow-[#D4AF6A]/5"
     >
       <div className="flex items-center gap-4 mb-4">
         <div className="w-14 h-14 rounded-full bg-[#D4AF6A]/20 flex items-center justify-center text-[#D4AF6A] text-xl font-bold overflow-hidden flex-shrink-0">
